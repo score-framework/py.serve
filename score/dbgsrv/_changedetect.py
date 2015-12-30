@@ -2,15 +2,16 @@ import pyinotify
 import os
 import builtins
 import sys
+import logging
 
-
+log = logging.getLogger('score.dbgsrv')
 mask = pyinotify.IN_MODIFY | pyinotify.IN_CREATE | pyinotify.IN_DELETE | \
     pyinotify.IN_DELETE_SELF | pyinotify.IN_MOVED_FROM | pyinotify.IN_MOVE_SELF
 
 
 class ChangeDetector:
 
-    def __init__(self):
+    def __init__(self, *, autostart=True):
         self.observed_files = set()
         self.observed_dirs = set()
         self.file2modules = {}
@@ -21,7 +22,8 @@ class ChangeDetector:
         builtins.__import__ = self._import
         for module in sys.modules.values():
             self.observe_module(module)
-        self.start()
+        if autostart:
+            self.start()
 
     def start(self):
         self.notifier.start()
@@ -52,18 +54,19 @@ class ChangeDetector:
         file = os.path.abspath(file)
         self.observed_files.add(file)
         dir = os.path.dirname(file)
-        if dir in self.observed_dirs:
-            return
-        self.observed_dirs.add(dir)
-        self.wm.add_watch(dir, mask, proc_fun=self._changed)
         if module:
             try:
                 self.file2modules[file].add(module)
             except KeyError:
                 self.file2modules[file] = {module}
+        if dir in self.observed_dirs:
+            return
+        self.observed_dirs.add(dir)
+        self.wm.add_watch(dir, mask, proc_fun=self._changed)
 
     def onchange(self, callback):
         self.callbacks.append(callback)
+        return callback
 
     def _changed(self, event):
         file = event.pathname
@@ -73,5 +76,6 @@ class ChangeDetector:
             modules = self.file2modules[file]
         except KeyError:
             modules = []
+        log.debug('file changed: %s' % file)
         for callback in self.callbacks:
             callback(file, modules)

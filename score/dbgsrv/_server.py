@@ -27,8 +27,8 @@
 from ._runner import Runner
 from ._changedetect import ChangeDetector
 import os
-import importlib
 import logging
+import signal
 
 log = logging.getLogger('score.dbgsrv')
 
@@ -50,30 +50,31 @@ class Server:
         self.runner = runner
 
     def start(self):
-        changedetector = ChangeDetector()
-
-        @changedetector.onchange
-        def reload_modules(file, modules):
-            for module in modules:
-                importlib.reload(module)
         while True:
             childpid = os.fork()
             if childpid:  # parent
                 try:
                     (_, status) = os.waitpid(childpid, 0)
-                    if status == 200:
+                    if status >> 8 == 200:
                         log.info('reloading ...')
                         continue
                     else:
                         break
                 except KeyboardInterrupt:
+                    print('', end='')
+                    os.kill(childpid, signal.SIGINT)
+                    os.waitpid(childpid, 0)
                     break
-
             # this is the child
-            @changedetector.onchange
-            def exit(file, modules):
+            changedetector = ChangeDetector()
+            try:
+                @changedetector.onchange
+                def exit(file, modules):
+                    self.runner.stop()
+                    os._exit(200)
+                self.runner.prepare()
+                self.runner.start()
+            except:
                 self.runner.stop()
-                os._exit(200)
-            self.runner.prepare()
-            self.runner.start()
-        changedetector.stop()
+            finally:
+                changedetector.stop()
