@@ -24,8 +24,8 @@
 # the discretion of STRG.AT GmbH also the competent court, in whose district the
 # Licensee has his registered seat, an establishment or assets.
 
-from ._runner import Runner
+from ._runner import Runner, SocketServerRunner
 from ._server import Server
 
 
-__all__ = ['Runner', 'Server']
+__all__ = ['Runner', 'SocketServerRunner', 'Server']

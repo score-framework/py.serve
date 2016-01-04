@@ -24,6 +24,11 @@
 # the discretion of STRG.AT GmbH also the competent court, in whose district the
 # Licensee has his registered seat, an establishment or assets.
 
+import abc
+import select
+import socket
+import socketserver
+
 
 class Runner:
 
@@ -34,4 +39,47 @@ class Runner:
         pass
 
     def stop(self):
+        pass
+
+
+class SocketServerRunner(Runner, abc.ABC):
+
+    def __init__(self):
+        self.__running = False
+
+    def prepare(self):
+        server = self._mkserver()
+        assert isinstance(server, socketserver.BaseServer)
+        self.__server = server
+
+    def start(self):
+        server = self.__server
+        self.__running = True
+        self.__intr_pair = socket.socketpair()
+        while self.__running:
+            try:
+                sockets = (server.socket, self.__intr_pair[0])
+                r, w, e = select.select(sockets, [], [])
+                if self.__intr_pair[0] in r:
+                    continue
+            except InterruptedError:
+                continue
+            request, client_address = server.get_request()
+            if not server.verify_request(request, client_address):
+                continue
+            try:
+                server.process_request(request, client_address)
+            except:
+                server.handle_error(request, client_address)
+                server.shutdown_request(request)
+        self.__server.server_close()
+
+    def stop(self):
+        if not self.__running:
+            return
+        self.__running = False
+        self.__intr_pair[1].send(b'0')
+
+    @abc.abstractmethod
+    def _mkserver(self):
         pass
