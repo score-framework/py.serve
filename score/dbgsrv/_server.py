@@ -48,33 +48,62 @@ class Server:
         if callable(runner):
             runner = CallbackRunner(runner)
         self.runner = runner
+        self.running = False
 
     def start(self):
-        while True:
+        self.running = True
+        while self.running:
             childpid = os.fork()
-            if childpid:  # parent
-                try:
-                    (_, status) = os.waitpid(childpid, 0)
-                    if status >> 8 == 200:
-                        log.info('reloading ...')
-                        continue
-                    else:
-                        break
-                except KeyboardInterrupt:
-                    print('', end='')
-                    os.kill(childpid, signal.SIGINT)
-                    os.waitpid(childpid, 0)
-                    break
-            # this is the child
-            changedetector = ChangeDetector()
-            try:
-                @changedetector.onchange
-                def exit(file, modules):
+            if childpid:
+                self._run_parent(childpid)
+            else:
+                self._run_child()
+
+    def _run_child(self):
+        changedetector = ChangeDetector()
+        started = False
+        reload = False
+        try:
+            def stop(*_):
+                if started:
                     self.runner.stop()
-                    os._exit(200)
-                self.runner.prepare()
+
+            @changedetector.onchange
+            def change(*args, **kwargs):
+                nonlocal reload
+                if reload:
+                    # already reloading
+                    return
+                reload = True
+                stop()
+            signal.signal(signal.SIGINT, stop)
+            self.runner.prepare()
+            if not reload:
+                started = True
                 self.runner.start()
-            except:
+            if reload:
+                os._exit(200)
+            else:
+                os._exit(0)
+        except Exception:
+            if started:
                 self.runner.stop()
-            finally:
-                changedetector.stop()
+            raise
+        finally:
+            changedetector.stop()
+
+    def _run_parent(self, childpid):
+        try:
+            (_, status) = os.waitpid(childpid, 0)
+            if status >> 8 == 200:
+                log.info('reloading ...')
+            else:
+                self.running = False
+        except KeyboardInterrupt:
+            os.waitpid(childpid, 0)
+            self.running = False
+        except Exception:
+            os.kill(childpid, signal.SIGINT)
+            os.waitpid(childpid, 0)
+            self.running = False
+            raise
