@@ -42,6 +42,7 @@ setup(
     url='http://score-framework.org',
     keywords='score framework server debug',
     packages=['score', 'score.dbgsrv'],
+    namespace_packages=['score'],
     zip_safe=False,
     license='LGPL',
     classifiers=[
@@ -60,8 +61,6 @@ setup(
     ],
     install_requires=[
         'score.init',
+        'pyinotify',
     ],
-    extras_require={
-        'pyramid': ['pyramid']
-    },
 )
