@@ -26,7 +26,6 @@
 
 import watchdog.events
 import watchdog.observers
-import watchdog.observers.inotify
 import watchdog.utils
 import os
 import sys
@@ -40,6 +39,7 @@ log = logging.getLogger('score.dbgsrv')
 Observer = watchdog.observers.Observer
 
 if Observer.__name__ == 'InotifyObserver':
+    import watchdog.observers.inotify
 
     # The inotify original observer has a small delay for pairing IN_MOVED_FROM
     # and IN_MOVE_TO events. Since we do not care whether something was moved
