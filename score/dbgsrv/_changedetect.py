@@ -24,7 +24,10 @@
 # the discretion of STRG.AT GmbH also the competent court, in whose district the
 # Licensee has his registered seat, an establishment or assets.
 
-import pyinotify
+import watchdog.events
+import watchdog.observers
+import watchdog.observers.inotify
+import watchdog.utils
 import os
 import sys
 import logging
@@ -32,18 +35,46 @@ import threading
 import time
 
 log = logging.getLogger('score.dbgsrv')
-mask = pyinotify.IN_MODIFY | pyinotify.IN_CREATE | pyinotify.IN_DELETE | \
-    pyinotify.IN_DELETE_SELF | pyinotify.IN_MOVED_FROM | pyinotify.IN_MOVE_SELF
 
 
-class ChangeDetector:
+Observer = watchdog.observers.Observer
+
+if Observer.__name__ == 'InotifyObserver':
+
+    # The inotify original observer has a small delay for pairing IN_MOVED_FROM
+    # and IN_MOVE_TO events. Since we do not care whether something was moved
+    # *into* or *out of* our watches, we will override this behaviour to achieve
+    # the fastest possible reload times.
+
+    class InotifyBuffer(watchdog.observers.inotify.InotifyBuffer):
+
+        def __init__(self, *args, **kwargs):
+            self.delay = 0
+            super().__init__(*args, **kwargs)
+
+    class InotifyEmitter(watchdog.observers.inotify.InotifyEmitter):
+
+        def on_thread_start(self):
+            path = watchdog.utils.unicode_paths.encode(self.watch.path)
+            self._inotify = InotifyBuffer(path, self.watch.is_recursive)
+
+    class InotifyObserver(watchdog.observers.inotify.InotifyObserver):
+
+        def __init__(self, *args, **kwargs):
+            watchdog.observers.api.BaseObserver.__init__(
+                self, *args, emitter_class=InotifyEmitter, **kwargs)
+
+    Observer = InotifyObserver
+
+
+class ChangeDetector(watchdog.events.FileSystemEventHandler):
 
     def __init__(self, *, autostart=True):
         self.callbacks = []
-        self.wm = pyinotify.WatchManager()
-        self.notifier = pyinotify.ThreadedNotifier(self.wm, self)
+        self.observer = Observer()
         self.gatherer = threading.Thread(target=self._gather_modules)
         self.running = False
+        self._observer_lock = threading.Lock()
         if autostart:
             self.start()
 
@@ -61,14 +92,15 @@ class ChangeDetector:
         self.file2modules = {}
         self.running = True
         self.gatherer.start()
-        self.notifier.start()
+        with self._observer_lock:
+            self.observer.start()
 
     def stop(self):
         if not self.running:
             return
         self.running = False
-        self.notifier.stop()
-        self.notifier.join()
+        self.observer.stop()
+        self.observer.join()
         self.gatherer.join()
 
     def observe_module(self, module):
@@ -105,18 +137,23 @@ class ChangeDetector:
             return
         self.observed_dirs.add(dir)
         if self.running:
-            # safeguarding against startup errors: self.wm.add_watch fails with
-            # errno EBADF (bad file descriptor) if the thread is not running.
-            # this happens most commonly when the Runner has a startup issue,
-            # when lots of new watches are added.
-            self.wm.add_watch(dir, mask, proc_fun=self._changed)
+            # safeguarding against startup errors: self.observer.schedule fails
+            # with errno EBADF (bad file descriptor) if the thread is not
+            # running.  this happens most commonly when the Runner has a startup
+            # issue, when lots of new watches are added.
+            with self._observer_lock:
+                self.observer.schedule(self, dir)
 
     def onchange(self, callback):
         self.callbacks.append(callback)
         return callback
 
-    def _changed(self, event):
-        file = event.pathname
+    def on_any_event(self, event):
+        if isinstance(event, watchdog.events.DirCreatedEvent):
+            return
+        if isinstance(event, watchdog.events.DirModifiedEvent):
+            return
+        file = event.src_path
         if file not in self.observed_files:
             return
         try:
