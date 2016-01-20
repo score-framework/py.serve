@@ -151,7 +151,8 @@ class ChangeDetector(watchdog.events.FileSystemEventHandler):
                         self.observer.unschedule(self.observed_dirs[other])
                         del self.observed_dirs[other]
                 log.debug('scheduling %s' % (dir))
-                self.observed_dirs[dir] = self.observer.schedule(self, dir)
+                self.observed_dirs[dir] = \
+                    self.observer.schedule(self, dir, recursive=True)
 
     def onchange(self, callback):
         self.callbacks.append(callback)
