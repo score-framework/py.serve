@@ -24,22 +24,13 @@
 # the discretion of STRG.AT GmbH also the competent court, in whose district the
 # Licensee has his registered seat, an establishment or assets.
 
-from ._runner import Runner
+from ._runner import CallbackRunner
 from ._changedetect import ChangeDetector
 import os
 import logging
 import signal
 
 log = logging.getLogger('score.dbgsrv')
-
-
-class CallbackRunner(Runner):
-
-    def __init__(self, callback):
-        self.callback = callback
-
-    def start(self):
-        self.callback()
 
 
 class Server:

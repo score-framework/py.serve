@@ -83,3 +83,12 @@ class SocketServerRunner(Runner, abc.ABC):
     @abc.abstractmethod
     def _mkserver(self):
         pass
+
+
+class CallbackRunner(Runner):
+
+    def __init__(self, callback):
+        self.callback = callback
+
+    def start(self):
+        self.callback()
