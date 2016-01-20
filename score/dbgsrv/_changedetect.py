@@ -33,7 +33,7 @@ import logging
 import threading
 import time
 
-log = logging.getLogger('score.dbgsrv')
+log = logging.getLogger('score.dbgsrv.changedetector')
 
 
 Observer = watchdog.observers.Observer
@@ -88,7 +88,7 @@ class ChangeDetector(watchdog.events.FileSystemEventHandler):
 
     def start(self):
         self.observed_files = set()
-        self.observed_dirs = set()
+        self.observed_dirs = {}
         self.file2modules = {}
         self.running = True
         self.gatherer.start()
@@ -135,14 +135,23 @@ class ChangeDetector(watchdog.events.FileSystemEventHandler):
                 self.file2modules[file] = {module}
         if dir in self.observed_dirs:
             return
-        self.observed_dirs.add(dir)
         if self.running:
             # safeguarding against startup errors: self.observer.schedule fails
             # with errno EBADF (bad file descriptor) if the thread is not
             # running.  this happens most commonly when the Runner has a startup
             # issue, when lots of new watches are added.
             with self._observer_lock:
-                self.observer.schedule(self, dir)
+                for other in self.observed_dirs.copy():
+                    if dir.startswith(other):
+                        log.debug('skipping %s because of %s' % (dir, other))
+                        return
+                    if other.startswith(dir):
+                        log.debug('unscheduling %s in favor of %s' %
+                                  (other, dir))
+                        self.observer.unschedule(self.observed_dirs[other])
+                        del self.observed_dirs[other]
+                log.debug('scheduling %s' % (dir))
+                self.observed_dirs[dir] = self.observer.schedule(self, dir)
 
     def onchange(self, callback):
         self.callbacks.append(callback)
