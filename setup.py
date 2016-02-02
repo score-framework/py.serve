@@ -34,7 +34,7 @@ with open(os.path.join(here, 'README.rst')) as f:
 
 setup(
     name='score.dbgsrv',
-    version='0.0.1',
+    version='0.1',
     description='Debugging server of The SCORE Framework',
     long_description=README,
     author='strg.at',
@@ -60,7 +60,7 @@ setup(
         'Topic :: Software Development :: Libraries :: Application Frameworks',
     ],
     install_requires=[
-        'score.init',
+        'score.init >= 0.3',
         'watchdog',
     ],
 )
