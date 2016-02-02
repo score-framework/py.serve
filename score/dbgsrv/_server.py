@@ -53,7 +53,7 @@ class Server:
     def _run_child(self):
         changedetector = ChangeDetector()
         started = False
-        reload = False
+        reloading = False
         try:
             def stop(*_):
                 if started:
@@ -61,18 +61,16 @@ class Server:
 
             @changedetector.onchange
             def change(*args, **kwargs):
-                nonlocal reload
-                if reload:
-                    # already reloading
-                    return
-                reload = True
-                stop()
+                nonlocal reloading
+                if not reloading:
+                    reloading = True
+                    stop()
             signal.signal(signal.SIGINT, stop)
             self.runner.prepare()
-            if not reload:
+            if not reloading:
                 started = True
                 self.runner.start()
-            if reload:
+            if reloading:
                 os._exit(200)
             else:
                 os._exit(0)
