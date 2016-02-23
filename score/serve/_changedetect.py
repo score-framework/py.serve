@@ -33,7 +33,7 @@ import logging
 import threading
 import time
 
-log = logging.getLogger('score.dbgsrv.changedetector')
+log = logging.getLogger('score.serve.changedetector')
 
 
 Observer = watchdog.observers.Observer

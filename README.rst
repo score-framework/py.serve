@@ -5,10 +5,10 @@ libraries for the development of large scale web projects. Powered by strg.at_.
 .. _strg.at: http://strg.at
 
 
-score.dbgsrv
-============
+score.serve
+===========
 
-A server manager for developing applications with The SCORE Framework.
+A server for developing and deploying applications using The SCORE Framework.
 
 This module is a work in progress, thus currently poorly documented :-/
 

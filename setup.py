@@ -33,15 +33,15 @@ with open(os.path.join(here, 'README.rst')) as f:
     README = f.read()
 
 setup(
-    name='score.dbgsrv',
-    version='0.1.1',
-    description='Debugging server of The SCORE Framework',
+    name='score.serve',
+    version='0.0.1',
+    description='Application server of The SCORE Framework',
     long_description=README,
     author='strg.at',
     author_email='score@strg.at',
     url='http://score-framework.org',
-    keywords='score framework server debug',
-    packages=['score', 'score.dbgsrv'],
+    keywords='score framework server',
+    packages=['score', 'score.serve'],
     namespace_packages=['score'],
     zip_safe=False,
     license='LGPL',
@@ -63,4 +63,9 @@ setup(
         'score.init >= 0.3',
         'watchdog',
     ],
+    entry_points={
+        'score.cli': [
+            'serve = score.serve.cli:main',
+        ]
+    },
 )

@@ -24,8 +24,33 @@
 # the discretion of STRG.AT GmbH also the competent court, in whose district the
 # Licensee has his registered seat, an establishment or assets.
 
-from ._runner import Runner, SocketServerRunner, CallbackRunner
-from ._server import Server
+import click
+from score.init import parse_config_file, init as score_init
 
 
-__all__ = ['Runner', 'SocketServerRunner', 'CallbackRunner', 'Server']
+@click.command('serve')
+@click.pass_context
+def main(clickctx):
+    """
+    Starts the application server
+    """
+    conf = parse_config_file(clickctx.obj['conf'].path)
+    overrides = {
+        'score.init': {
+            'modules': 'score.serve'
+        }
+    }
+    try:
+        conf['serve']['conf']
+    except KeyError:
+        if 'serve' not in conf:
+            conf['serve'] = {}
+        conf['serve']['conf'] = clickctx.obj['conf'].path
+    score = score_init(conf, overrides=overrides)
+    try:
+        # delete logging configuration, we have already initialized logging
+        # during score_init, above.
+        del conf['formatters']
+    except KeyError:
+        pass
+    score.serve.start()

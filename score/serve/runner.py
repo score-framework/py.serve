@@ -46,8 +46,6 @@ class SocketServerRunner(Runner, abc.ABC):
 
     def __init__(self):
         self.__running = False
-
-    def prepare(self):
         server = self._mkserver()
         assert isinstance(server, socketserver.BaseServer)
         self.__server = server
