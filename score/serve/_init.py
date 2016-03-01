@@ -66,11 +66,13 @@ class ConfiguredServeModule(ConfiguredModule):
         return [score._modules[mod] for mod in self.modules]
 
     def start(self):
-        childpid = os.fork()
-        if childpid:
-            self._run_parent(childpid)
-        else:
-            self._run_child()
+        self.running = True
+        while self.running:
+            childpid = os.fork()
+            if childpid:
+                self._run_parent(childpid)
+            else:
+                self._run_child()
 
     def _run_parent(self, childpid):
         try:
@@ -115,7 +117,7 @@ class ConfiguredServeModule(ConfiguredModule):
             if changedetector:
                 @changedetector.onchange
                 def change(*args, **kwargs):
-                    global reloading
+                    nonlocal reloading
                     reloading = True
                     stop()
             # wait for all threads to start
