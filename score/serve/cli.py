@@ -37,9 +37,13 @@ def main(clickctx):
     conf = parse_config_file(clickctx.obj['conf'].path)
     overrides = {
         'score.init': {
-            'modules': 'score.serve'
+            'modules': 'score.serve',
         }
     }
+    try:
+        del conf['score.init']['autoimport']
+    except KeyError:
+        pass
     try:
         conf['serve']['conf']
     except KeyError:
