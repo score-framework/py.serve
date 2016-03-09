@@ -34,7 +34,7 @@ with open(os.path.join(here, 'README.rst')) as f:
 
 setup(
     name='score.serve',
-    version='0.0.4',
+    version='0.0.5',
     description='Application server of The SCORE Framework',
     long_description=README,
     author='strg.at',
