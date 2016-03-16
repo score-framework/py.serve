@@ -154,9 +154,12 @@ class ChangeDetector(watchdog.events.FileSystemEventHandler):
                 self.observed_dirs[dir] = \
                     self.observer.schedule(self, dir, recursive=True)
 
-    def onchange(self, callback):
+    def add_callback(self, callback):
         self.callbacks.append(callback)
         return callback
+
+    def clear_callbacks(self):
+        self.callbacks = []
 
     def on_any_event(self, event):
         if isinstance(event, watchdog.events.DirCreatedEvent):
