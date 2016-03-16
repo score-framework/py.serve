@@ -116,11 +116,15 @@ class ConfiguredServeModule(ConfiguredModule):
                 stopping = True
                 for thread in threads:
                     thread.stop()
+            log.info('ready to serve!')
 
             if changedetector:
                 @changedetector.add_callback
                 def reload1(*args, **kwargs):
                     nonlocal reloading
+                    if reloading:
+                        return
+                    log.info('Detected file change, reloading ...')
                     reloading = True
                     stop()
             for thread in threads:
@@ -129,7 +133,6 @@ class ConfiguredServeModule(ConfiguredModule):
                     continue
                 if not stopping and changedetector:
                     log.exception(e)
-                    log.info('Will reload once the error is adressed')
                     reloading = True
                     for frame in traceback.extract_tb(e.__traceback__):
                         changedetector.observe(frame[0])
@@ -139,6 +142,7 @@ class ConfiguredServeModule(ConfiguredModule):
                     def reload2(*args, **kwargs):
                         nonlocal reloading
                         nonlocal reload_condition
+                        log.info('Detected file change, reloading ...')
                         with reload_condition:
                             reload_condition.notify()
                 errors.append(e)
@@ -176,7 +180,6 @@ class ConfiguredServeModule(ConfiguredModule):
             if not changedetector:
                 raise
             log.exception(e)
-            log.info('Will reload once the error is adressed')
             for frame in traceback.extract_tb(e.__traceback__):
                 changedetector.observe(frame[0])
             reload_condition = threading.Condition()
@@ -185,6 +188,7 @@ class ConfiguredServeModule(ConfiguredModule):
             def change(*args, **kwargs):
                 nonlocal reload_condition
                 with reload_condition:
+                    log.info('Detected file change, reloading ...')
                     reload_condition.notify()
             try:
                 with reload_condition:

@@ -72,6 +72,8 @@ class ChangeDetector(watchdog.events.FileSystemEventHandler):
     def __init__(self, *, autostart=True):
         self.callbacks = []
         self.observer = Observer()
+        # set thread name
+        self.observer.name = 'ChangeDetector'
         self.gatherer = threading.Thread(target=self._gather_modules)
         self.running = False
         self._observer_lock = threading.Lock()
