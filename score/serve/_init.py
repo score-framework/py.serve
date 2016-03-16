@@ -66,9 +66,6 @@ class ConfiguredServeModule(ConfiguredModule):
         self.autoreload = autoreload
         self.running = False
 
-    def _collect_runners(self, score):
-        return [score._modules[mod] for mod in self.modules]
-
     def start(self):
         self.running = True
         while self.running:
@@ -97,52 +94,32 @@ class ConfiguredServeModule(ConfiguredModule):
         if self.autoreload:
             changedetector = ChangeDetector()
             changedetector.observe(self.conf)
-        runners = []
-        reload_condition = threading.Condition()
         try:
-            score = init_from_file(self.conf)
-        except Exception as e:
-            if not changedetector:
-                raise
-            log.exception(e)
-            for frame in traceback.extract_tb(e.__traceback__):
-                changedetector.observe(frame[0])
-
-            @changedetector.add_callback
-            def change(*args, **kwargs):
-                # use a threading.Condition here
-                nonlocal reload_condition
-                with reload_condition:
-                    reload_condition.notify()
-            with reload_condition:
-                reload_condition.wait()
-            os._exit(200)
-        if changedetector:
-            for file in parse_list(score.conf['score.init']['_based_on']):
-                changedetector.observe(file)
-        for mod in self.modules:
-            runners += score._modules[mod].get_serve_runners()
-        errors = []
-        reloading = False
-        result_queue = queue.Queue()
-        threads = []
-        for runner in runners:
-            threads.append(RunnerThread(runner, result_queue))
-        stopping = False
-
-        def stop():
-            nonlocal stopping
-            if stopping:
-                return
-            stopping = True
-            for thread in threads:
-                thread.stop()
+            runners = self._collect_runners(changedetector)
+            errors = []
+            reloading = False
+            stopping = False
+            result_queue = queue.Queue()
+            reload_condition = threading.Condition()
+            threads = list(
+                RunnerThread(runner, result_queue) for runner in runners)
+        except KeyboardInterrupt:
+            os._exit(0)
         try:
             for thread in threads:
                 thread.start()
+
+            def stop():
+                nonlocal stopping
+                if stopping:
+                    return
+                stopping = True
+                for thread in threads:
+                    thread.stop()
+
             if changedetector:
                 @changedetector.add_callback
-                def change1(*args, **kwargs):
+                def reload1(*args, **kwargs):
                     nonlocal reloading
                     reloading = True
                     stop()
@@ -151,27 +128,31 @@ class ConfiguredServeModule(ConfiguredModule):
                 if not e:
                     continue
                 if not stopping and changedetector:
+                    log.exception(e)
+                    log.info('Will reload once the error is adressed')
+                    reloading = True
+                    for frame in traceback.extract_tb(e.__traceback__):
+                        changedetector.observe(frame[0])
                     changedetector.clear_callbacks()
 
                     @changedetector.add_callback
-                    def change2(*args, **kwargs):
-                        # use a threading.Condition here
+                    def reload2(*args, **kwargs):
                         nonlocal reloading
                         nonlocal reload_condition
                         with reload_condition:
                             reload_condition.notify()
-                        reloading = True
                 errors.append(e)
                 stop()
         except KeyboardInterrupt:
             stop()
+            reloading = False
         finally:
             if changedetector:
                 changedetector.stop()
             for thread in threads:
                 thread.join()
         if errors:
-            if reloading:
+            if changedetector and reloading:
                 with reload_condition:
                     reload_condition.wait()
                 os._exit(200)
@@ -181,16 +162,46 @@ class ConfiguredServeModule(ConfiguredModule):
         else:
             os._exit(0)
 
+    def _collect_runners(self, changedetector):
+        try:
+            runners = []
+            score = init_from_file(self.conf)
+            if changedetector:
+                for file in parse_list(score.conf['score.init']['_based_on']):
+                    changedetector.observe(file)
+            for mod in self.modules:
+                runners += score._modules[mod].get_serve_runners()
+            return runners
+        except Exception as e:
+            if not changedetector:
+                raise
+            log.exception(e)
+            log.info('Will reload once the error is adressed')
+            for frame in traceback.extract_tb(e.__traceback__):
+                changedetector.observe(frame[0])
+            reload_condition = threading.Condition()
+
+            @changedetector.add_callback
+            def change(*args, **kwargs):
+                nonlocal reload_condition
+                with reload_condition:
+                    reload_condition.notify()
+            try:
+                with reload_condition:
+                    reload_condition.wait()
+            except KeyboardInterrupt:
+                os._exit(0)
+            os._exit(200)
+
 
 class RunnerThread(threading.Thread):
 
     class State(enum.Enum):
         PREPARED = 0
-        WAITING = 1
-        RUNNING = 2
-        ABORTED = 3
-        SUCCESS = 4
-        EXCEPTION = 5
+        RUNNING = 1
+        ABORTED = 2
+        SUCCESS = 3
+        EXCEPTION = 4
 
     def __init__(self, runner, result_queue):
         super().__init__()
@@ -199,11 +210,8 @@ class RunnerThread(threading.Thread):
         self.state = self.State.PREPARED
 
     def run(self):
-        self.state = self.State.PREPARED
-        if self.state != self.State.PREPARED:
-            return
-        self.state = self.State.RUNNING
         try:
+            self.state = self.State.RUNNING
             self.runner.start()
             self.state = self.State.SUCCESS
             self.result_queue.put(None)
@@ -213,7 +221,5 @@ class RunnerThread(threading.Thread):
             self.result_queue.put(e)
 
     def stop(self):
-        if self.state == self.State.PREPARED:
-            self.state = self.State.ABORTED
-        elif self.state == self.State.RUNNING:
+        if self.state == self.State.RUNNING:
             self.runner.stop()
