@@ -32,9 +32,6 @@ import socketserver
 
 class Runner:
 
-    def prepare(self):
-        pass
-
     def start(self):
         pass
 
