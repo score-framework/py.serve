@@ -180,8 +180,11 @@ class ConfiguredServeModule(ConfiguredModule):
             if not changedetector:
                 raise
             log.exception(e)
-            for frame in traceback.extract_tb(e.__traceback__):
-                changedetector.observe(frame[0])
+            if isinstance(e, SyntaxError):
+                changedetector.observe(e.filename)
+            else:
+                for frame in traceback.extract_tb(e.__traceback__):
+                    changedetector.observe(frame[0])
             reload_condition = threading.Condition()
 
             @changedetector.add_callback
