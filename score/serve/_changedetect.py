@@ -145,7 +145,6 @@ class ChangeDetector(watchdog.events.FileSystemEventHandler):
             with self._observer_lock:
                 for other in self.observed_dirs.copy():
                     if dir.startswith(other):
-                        log.debug('skipping %s because of %s' % (dir, other))
                         return
                     if other.startswith(dir):
                         log.debug('unscheduling %s in favor of %s' %
@@ -168,13 +167,18 @@ class ChangeDetector(watchdog.events.FileSystemEventHandler):
             return
         if isinstance(event, watchdog.events.DirModifiedEvent):
             return
+        FileCreatedEvent = watchdog.events.FileCreatedEvent
         file = event.src_path
-        if file not in self.observed_files:
-            return
-        try:
-            modules = self.file2modules[file]
-        except KeyError:
+        if file in self.observed_files:
+            try:
+                modules = self.file2modules[file]
+            except KeyError:
+                modules = []
+            log.debug('file changed: %s' % file)
+        elif isinstance(event, FileCreatedEvent) and file.endswith('.py'):
+            log.debug('new file: %s' % file)
             modules = []
-        log.debug('file changed: %s' % file)
+        else:
+            return
         for callback in self.callbacks:
             callback(file, modules)
