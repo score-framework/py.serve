@@ -60,7 +60,7 @@ setup(
         'Topic :: Software Development :: Libraries :: Application Frameworks',
     ],
     install_requires=[
-        'score.init >= 0.3',
+        'score.init >= 0.3.9',
         'watchdog',
     ],
     entry_points={

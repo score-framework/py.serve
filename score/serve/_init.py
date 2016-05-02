@@ -171,7 +171,7 @@ class ConfiguredServeModule(ConfiguredModule):
             runners = []
             score = init_from_file(self.conf)
             if changedetector:
-                for file in parse_list(score.conf['score.init']['_based_on']):
+                for file in parse_list(score.conf['score.init']['_files']):
                     changedetector.observe(file)
             for mod in self.modules:
                 runners += score._modules[mod].get_serve_runners()
