@@ -1,4 +1,4 @@
-# Copyright © 2015 STRG.AT GmbH, Vienna, Austria
+# Copyright © 2015,2016 STRG.AT GmbH, Vienna, Austria
 #
 # This file is part of the The SCORE Framework.
 #
@@ -34,7 +34,7 @@ with open(os.path.join(here, 'README.rst')) as f:
 
 setup(
     name='score.serve',
-    version='0.0.9',
+    version='0.1.0',
     description='Application server of The SCORE Framework',
     long_description=README,
     author='strg.at',
