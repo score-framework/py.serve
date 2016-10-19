@@ -52,6 +52,9 @@ if Observer.__name__ == 'InotifyObserver':
             self.delay = 0
             super().__init__(*args, **kwargs)
 
+        def close(self):
+            self.stop()
+
     class InotifyEmitter(watchdog.observers.inotify.InotifyEmitter):
 
         def on_thread_start(self):
@@ -91,21 +94,27 @@ class ChangeDetector(watchdog.events.FileSystemEventHandler):
     def start(self):
         self.observed_files = set()
         self.observed_dirs = {}
+        self.observed_modules = set()
         self.file2modules = {}
         self.running = True
         self.gatherer.start()
         with self._observer_lock:
             self.observer.start()
 
-    def stop(self):
+    def stop(self, wait=True):
         if not self.running:
             return
         self.running = False
         self.observer.stop()
-        self.observer.join()
-        self.gatherer.join()
+        if wait:
+            if threading.current_thread() != self.observer:
+                self.observer.join()
+            self.gatherer.join()
 
     def observe_module(self, module):
+        if module in self.observed_modules:
+            return
+        self.observed_modules.add(module)
         try:
             file = module.__file__
         except AttributeError:
@@ -123,11 +132,11 @@ class ChangeDetector(watchdog.events.FileSystemEventHandler):
         self.observe(file, module)
 
     def observe(self, file, module=None):
-        if file in self.observed_files:
-            return
         if not os.path.exists(file):
             return
         file = os.path.abspath(file)
+        if file in self.observed_files:
+            return
         self.observed_files.add(file)
         dir = os.path.dirname(file)
         if module:
@@ -140,7 +149,7 @@ class ChangeDetector(watchdog.events.FileSystemEventHandler):
         if self.running:
             # safeguarding against startup errors: self.observer.schedule fails
             # with errno EBADF (bad file descriptor) if the thread is not
-            # running.  this happens most commonly when the Runner has a startup
+            # running.  this happens most commonly when the Worker has a startup
             # issue, when lots of new watches are added.
             with self._observer_lock:
                 for other in self.observed_dirs.copy():
@@ -157,6 +166,10 @@ class ChangeDetector(watchdog.events.FileSystemEventHandler):
 
     def add_callback(self, callback):
         self.callbacks.append(callback)
+        return callback
+
+    def remove_callback(self, callback):
+        self.callbacks.remove(callback)
         return callback
 
     def clear_callbacks(self):

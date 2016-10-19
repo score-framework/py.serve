@@ -44,11 +44,9 @@ def main(clickctx):
         del conf['score.init']['autoimport']
     except KeyError:
         pass
-    try:
-        conf['serve']['conf']
-    except KeyError:
-        if 'serve' not in conf:
-            conf['serve'] = {}
+    if 'serve' not in conf:
+        conf['serve'] = {}
+    if 'conf' not in conf['serve']:
         conf['serve']['conf'] = clickctx.obj['conf'].path
     score = score_init(conf, overrides=overrides)
     try:

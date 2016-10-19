@@ -24,17 +24,18 @@
 # the discretion of STRG.AT GmbH also the competent court, in whose district the
 # Licensee has his registered seat, an establishment or assets.
 
+import asyncio
 from score.init import (
     ConfiguredModule, parse_list, parse_bool, init_from_file,
     InitializationError)
-import os
-import signal
-import threading
-import queue
+from .service import Service
+from ._forked import fork, Backgrounded
 from ._changedetect import ChangeDetector
-import enum
-import logging
+from collections import OrderedDict
+from contextlib import contextmanager
 import traceback
+import signal
+import logging
 
 log = logging.getLogger('score.serve')
 
@@ -60,173 +61,164 @@ class ConfiguredServeModule(ConfiguredModule):
 
     def __init__(self, conf, modules, autoreload):
         import score.serve
-        super().__init__(score.serve)
+        ConfiguredModule.__init__(self, score.serve)
         self.conf = conf
         self.modules = modules
         self.autoreload = autoreload
-        self.running = False
 
     def start(self):
-        self.running = True
-        while self.running:
-            childpid = os.fork()
-            if childpid:
-                self._run_parent(childpid)
-            else:
-                self._run_child()
+        reload = ServerInstance(self).reload
+        while reload:
+            log.info('reloading')
+            reload = ServerInstance(self).reload
 
-    def _run_parent(self, childpid):
-        try:
-            (_, status) = os.waitpid(childpid, 0)
-            if status >> 8 != 200:
-                self.running = False
-        except KeyboardInterrupt:
-            os.waitpid(childpid, 0)
-            self.running = False
-        except Exception:
-            os.kill(childpid, signal.SIGINT)
-            os.waitpid(childpid, 0)
-            self.running = False
-            raise
 
-    def _run_child(self):
-        changedetector = None
-        if self.autoreload:
-            changedetector = ChangeDetector()
-            changedetector.observe(self.conf)
-        try:
-            runners = self._collect_runners(changedetector)
-            errors = []
-            reloading = False
-            stopping = False
-            result_queue = queue.Queue()
-            reload_condition = threading.Condition()
-            threads = list(
-                RunnerThread(runner, result_queue) for runner in runners)
-        except KeyboardInterrupt:
-            os._exit(0)
-        try:
-            for thread in threads:
-                thread.start()
+class ServerInstance:
 
-            def stop():
-                nonlocal stopping
-                if stopping:
-                    return
-                stopping = True
-                for thread in threads:
-                    thread.stop()
-            log.info('ready to serve!')
+    def __init__(self, conf):
+        self.conf = conf
+        self.loop = asyncio.new_event_loop()
+        self.controller = fork(self.loop, ServiceController, self.conf)
+        if self.conf.autoreload:
+            self.controller.on('restart', self.restart)
+        self.reload = False
+        self.controller.on('state-change', self.quit_if_stopped)
+        # self.loop.set_debug(True)
+        self.loop.add_signal_handler(signal.SIGINT, self.signal_handler_stop)
+        self.loop.create_task(self.controller.start()).add_done_callback(
+            lambda *_: log.info('started'))
+        self.loop.run_forever()
+        self.loop.remove_signal_handler(signal.SIGINT)
 
-            if changedetector:
-                @changedetector.add_callback
-                def reload1(*args, **kwargs):
-                    nonlocal reloading
-                    if reloading:
-                        return
-                    log.info('Detected file change, reloading ...')
-                    reloading = True
-                    stop()
-            for thread in threads:
-                e = result_queue.get()
-                if not e:
-                    continue
-                if not stopping and changedetector:
-                    log.exception(e)
-                    reloading = True
-                    for frame in traceback.extract_tb(e.__traceback__):
-                        changedetector.observe(frame[0])
-                    changedetector.clear_callbacks()
+    def signal_handler_stop(self):
+        log.info('Ctrl+C detected, stopping')
+        self.loop.remove_signal_handler(signal.SIGINT)
+        self.loop.create_task(self.controller.stop())
+        self.reload = False
 
-                    @changedetector.add_callback
-                    def reload2(*args, **kwargs):
-                        nonlocal reloading
-                        nonlocal reload_condition
-                        log.info('Detected file change, reloading ...')
-                        with reload_condition:
-                            reload_condition.notify()
-                errors.append(e)
-                stop()
-        except KeyboardInterrupt:
-            stop()
-            reloading = False
-        finally:
-            if changedetector:
-                changedetector.stop()
-            for thread in threads:
-                thread.join()
-        if errors:
-            if changedetector and reloading:
-                with reload_condition:
-                    reload_condition.wait()
-                os._exit(200)
-            raise errors[0]
-        if reloading:
-            os._exit(200)
+    def quit_if_stopped(self, states):
+        if not all(state in (Service.State.STOPPED, Service.State.EXCEPTION)
+                   for state in states.values()):
+            return
+        self.controller.off('state-change', self.quit_if_stopped)
+        self.stop_loop()
+
+    @asyncio.coroutine
+    def restart(self):
+        self.reload = True
+        yield from self.controller.stop()
+        self.stop_loop()
+
+    def stop_loop(self, *_):
+        pending_tasks = [t for t in asyncio.Task.all_tasks(self.loop)
+                         if not t.done()]
+        if not pending_tasks:
+            self.loop.stop()
         else:
-            os._exit(0)
-
-    def _collect_runners(self, changedetector):
-        try:
-            runners = []
-            score = init_from_file(self.conf)
-            if changedetector:
-                for file in parse_list(score.conf['score.init']['_files']):
-                    changedetector.observe(file)
-            for mod in self.modules:
-                runners += score._modules[mod].get_serve_runners()
-            return runners
-        except Exception as e:
-            if not changedetector:
-                raise
-            log.exception(e)
-            if isinstance(e, SyntaxError):
-                changedetector.observe(e.filename)
-            else:
-                for frame in traceback.extract_tb(e.__traceback__):
-                    changedetector.observe(frame[0])
-            reload_condition = threading.Condition()
-
-            @changedetector.add_callback
-            def change(*args, **kwargs):
-                nonlocal reload_condition
-                with reload_condition:
-                    log.info('Detected file change, reloading ...')
-                    reload_condition.notify()
-            try:
-                with reload_condition:
-                    reload_condition.wait()
-            except KeyboardInterrupt:
-                os._exit(0)
-            os._exit(200)
+            task = pending_tasks.pop()
+            task.add_done_callback(self.stop_loop)
 
 
-class RunnerThread(threading.Thread):
+class ServiceController(Backgrounded):
 
-    class State(enum.Enum):
-        PREPARED = 0
-        RUNNING = 1
-        ABORTED = 2
-        SUCCESS = 3
-        EXCEPTION = 4
+    def __init__(self, conf):
+        self.conf = conf
+        self._services = None
+        self._changedetector = None
 
-    def __init__(self, runner, result_queue):
-        super().__init__()
-        self.runner = runner
-        self.result_queue = result_queue
-        self.state = self.State.PREPARED
+    def start(self):
+        if not self._services:
+            self._init_services()
+        self._call_on_subservices('start')
 
-    def run(self):
-        try:
-            self.state = self.State.RUNNING
-            self.runner.start()
-            self.state = self.State.SUCCESS
-            self.result_queue.put(None)
-        except Exception as e:
-            self.state = self.State.EXCEPTION
-            self.runner.stop()
-            self.result_queue.put(e)
+    def pause(self):
+        if not self._services:
+            self._init_services()
+        self._call_on_subservices('pause')
 
     def stop(self):
-        if self.state == self.State.RUNNING:
-            self.runner.stop()
+        if not self._services:
+            return
+        if self._changedetector:
+            self._changedetector.stop(wait=False)
+            self._changedetector = None
+        self._call_on_subservices('stop')
+
+    def service_states(self):
+        if not self._services:
+            self._init_services()
+        result = OrderedDict()
+        for name, service in self._services.items():
+            result[name] = service.state
+        return result
+
+    @property
+    @contextmanager
+    def _acquire_service_locks(self):
+        acquired = []
+        try:
+            for service in self._services.values():
+                service.state_lock.acquire()
+                acquired.append(service)
+            yield
+        finally:
+            for service in acquired:
+                service.state_lock.release()
+
+    def _init_services(self):
+        if self.conf.autoreload:
+            self._changedetector = ChangeDetector()
+            self._changedetector.observe(self.conf.conf)
+            self._changedetector.add_callback(self.restart)
+        try:
+            self._collect_services()
+            for service in self._services.values():
+                service.register_state_change_listener(
+                    self._service_state_changed)
+        except Exception as e:
+            if not self._changedetector:
+                raise
+
+            self._services.clear()
+            self.conf.log.exception(e)
+            if isinstance(e, SyntaxError):
+                self._changedetector.observe(e.filename)
+            else:
+                for frame in traceback.extract_tb(e.__traceback__):
+                    self._changedetector.observe(frame[0])
+
+    def _service_state_changed(self, service, old, new):
+        states = {service.name: service.state
+                  for service in self._services.values()}
+        self.trigger('state-change', states)
+        if new == Service.State.EXCEPTION:
+            self.conf.log.exception(service.exception)
+
+    def _collect_services(self):
+        self._services = OrderedDict()
+        score = init_from_file(self.conf.conf)
+        if self._changedetector:
+            for file in parse_list(score.conf['score.init']['_files']):
+                self._changedetector.observe(file)
+        for mod in self.conf.modules:
+            workers = score._modules[mod].score_serve_workers()
+            if isinstance(workers, list):
+                for i, worker in enumerate(workers):
+                    name = '%s/%d' % (mod, i)
+                    self._services[name] = Service(name, worker)
+            elif isinstance(workers, dict):
+                for name, worker in workers.items():
+                    name = '%s/%s' % (mod, name)
+                    self._services[name] = Service(name, worker)
+
+    def restart(self, *_):
+        self.trigger('restart')
+        changedetector = self._changedetector
+        self._changedetector = None
+        if changedetector:
+            changedetector.stop(wait=False)
+        self.stop()
+
+    def _call_on_subservices(self, func, *args):
+        for service in self._services.values():
+            getattr(service, func)(*args)
