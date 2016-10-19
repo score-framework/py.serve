@@ -41,7 +41,7 @@ setup(
     author_email='score@strg.at',
     url='http://score-framework.org',
     keywords='score framework server',
-    packages=['score', 'score.serve'],
+    packages=['score', 'score.serve', 'score.serve.worker'],
     namespace_packages=['score'],
     zip_safe=False,
     license='LGPL',
