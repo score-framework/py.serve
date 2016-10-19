@@ -60,10 +60,11 @@ class SocketServerWorker(Worker):
             return
         while self.state not in self.final_states:
             try:
-                if self.state == Service.State.RUNNING:
-                    sockets = (self.__server.socket, self.__intr_pair[0],)
-                else:
-                    sockets = (self.__intr_pair[0],)
+                with self.__request_lock:
+                    if self.state == Service.State.RUNNING:
+                        sockets = (self.__server.socket, self.__intr_pair[0],)
+                    else:
+                        sockets = (self.__intr_pair[0],)
                 r, w, e = select.select(sockets, [], [])
                 if self.__intr_pair[0] in r:
                     self.__intr_pair[0].recv(2**10)
