@@ -26,8 +26,9 @@
 
 
 from ._init import init
-from .worker import Worker, SocketServerWorker, transitions
+from .worker import Worker, SocketServerWorker, SimpleWorker, transitions
 from .service import Service
 
 
-__all__ = ('init', 'Worker', 'SocketServerWorker', 'transitions', 'Service')
+__all__ = ('init', 'Worker', 'SocketServerWorker', 'SimpleWorker',
+           'transitions', 'Service')

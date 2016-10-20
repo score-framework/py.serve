@@ -85,15 +85,26 @@ class ServerInstance:
         self.controller.on('state-change', self.quit_if_stopped)
         # self.loop.set_debug(True)
         self.loop.add_signal_handler(signal.SIGINT, self.signal_handler_stop)
-        self.loop.create_task(self.controller.start()).add_done_callback(
-            lambda *_: log.info('started'))
+        self.__start_1()
         self.loop.run_forever()
         self.loop.remove_signal_handler(signal.SIGINT)
+
+    def __start_1(self):
+        self.__stopping = False
+        task = self.loop.create_task(self.controller.pause())
+        task.add_done_callback(self.__start_2)
+
+    def __start_2(self, future):
+        exc = future.exception()
+        if not exc:
+            task = self.loop.create_task(self.controller.start())
+            task.add_done_callback(lambda *_: log.info('started'))
 
     def signal_handler_stop(self):
         log.info('Ctrl+C detected, stopping')
         self.loop.remove_signal_handler(signal.SIGINT)
-        self.loop.create_task(self.controller.stop())
+        task = self.loop.create_task(self.controller.stop())
+        task.add_done_callback(self.stop_loop)
         self.reload = False
 
     def quit_if_stopped(self, states):
@@ -109,7 +120,12 @@ class ServerInstance:
         yield from self.controller.stop()
         self.stop_loop()
 
-    def stop_loop(self, *_):
+    def stop_loop(self, future=None):
+        if self.__stopping and not future:
+            return
+        self.__stopping = True
+        if future:
+            future.exception()
         pending_tasks = [t for t in asyncio.Task.all_tasks(self.loop)
                          if not t.done()]
         if not pending_tasks:
@@ -146,7 +162,7 @@ class ServiceController(Backgrounded):
 
     def service_states(self):
         if not self._services:
-            self._init_services()
+            return []
         result = OrderedDict()
         for name, service in self._services.items():
             result[name] = service.state
@@ -176,16 +192,15 @@ class ServiceController(Backgrounded):
                 service.register_state_change_listener(
                     self._service_state_changed)
         except Exception as e:
-            if not self._changedetector:
-                raise
-
-            self._services.clear()
-            self.conf.log.exception(e)
-            if isinstance(e, SyntaxError):
-                self._changedetector.observe(e.filename)
-            else:
-                for frame in traceback.extract_tb(e.__traceback__):
-                    self._changedetector.observe(frame[0])
+            if self._changedetector:
+                self._services.clear()
+                self.conf.log.exception(e)
+                if isinstance(e, SyntaxError):
+                    self._changedetector.observe(e.filename)
+                else:
+                    for frame in traceback.extract_tb(e.__traceback__):
+                        self._changedetector.observe(frame[0])
+            raise
 
     def _service_state_changed(self, service, old, new):
         states = {service.name: service.state
