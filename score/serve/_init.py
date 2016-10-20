@@ -47,6 +47,22 @@ defaults = {
 
 
 def init(confdict):
+    """
+    Initializes this module acoording to :ref:`our module initialization
+    guidelines <module_initialization>` with the following configuration keys:
+
+    :confkey:`autoreload` :confdefault:`False`
+        When set to :func:`true <score.init.parse_bool>`, the server will
+        automatically reload whenever it detects a change in one of the python
+        files, that are in use.
+
+    :confkey:`modules`
+        The :func:`list <score.init.parse_list>` of modules to serve. This need
+        to be a list of module aliases, i.e. the same name, with which you
+        configured the module with ("score.http" becomes "http" if not specified
+        otherwise.)
+
+    """
     conf = defaults.copy()
     conf.update(confdict)
     modules = parse_list(conf['modules'])
@@ -58,6 +74,9 @@ def init(confdict):
 
 
 class ConfiguredServeModule(ConfiguredModule):
+    """
+    This module's :class:`configuration class`
+    """
 
     def __init__(self, conf, modules, autoreload):
         import score.serve
@@ -67,13 +86,18 @@ class ConfiguredServeModule(ConfiguredModule):
         self.autoreload = autoreload
 
     def start(self):
-        reload = ServerInstance(self).reload
+        """
+        Starts all configured workers and runs until the workers stop or
+        <CTRL-C> ist pressed. Will optionally reload the server, if it was
+        configured to do so via ``autoreload``.
+        """
+        reload = _ServerInstance(self).reload
         while reload:
             log.info('reloading')
-            reload = ServerInstance(self).reload
+            reload = _ServerInstance(self).reload
 
 
-class ServerInstance:
+class _ServerInstance:
 
     def __init__(self, conf):
         self.conf = conf

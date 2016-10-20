@@ -35,6 +35,10 @@ intermediate_states = {
 
 
 class Service:
+    """
+    A wrapper around workers, that you can use to control your workers without
+    worrying about threading.
+    """
 
     State = globals()['State']
 
@@ -52,22 +56,51 @@ class Service:
         self.state_timestamp = time.time()
         worker.service = self
 
-    def register_state_change_listener(self, callback):
-        self.state_listeners.add(callback)
-
-    def unregister_state_change_listener(self, callback):
-        self.state_listeners.discard(callback)
-
     def start(self):
+        """
+        Makes sure the worker ends up in the ``RUNNING`` state eventually.
+        """
         self._transition_to(RUNNING)
 
     def pause(self):
+        """
+        Makes sure the worker ends up in the ``PAUSED`` state eventually.
+        """
+        self._transition_to(PAUSED)
+
+    def prepare(self):
+        """
+        An alias for :meth:`pause` for ensuring compaitibility with the
+        :class:`Worker` API.
+        """
         self._transition_to(PAUSED)
 
     def stop(self):
+        """
+        Makes sure the worker ends up in the ``STOPPED`` state eventually.
+        """
         self._transition_to(STOPPED)
 
-    prepare = pause
+    def register_state_change_listener(self, callback):
+        """
+        Registers a `callable` that will be invoked whenever the state of the
+        worker changes. The *callback* will receive three arguments:
+
+        * this service,
+        * the old state and
+        * the new (current) state.
+
+        Note, that due to the nature of threading, it is possible that the
+        Service is already in another state than the one provided as the third
+        argument.
+        """
+        self.state_listeners.add(callback)
+
+    def unregister_state_change_listener(self, callback):
+        """
+        Removes a previously registered listener.
+        """
+        self.state_listeners.discard(callback)
 
     def _transition_to(self, target_state):
         with self.state_lock:

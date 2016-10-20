@@ -10,6 +10,14 @@ from ..service import Service
 
 
 class SocketServerWorker(Worker):
+    """
+    A specialized worker for handling :mod:`socketserver` objects.
+
+    You only need to implement the function ``_mkserver`` in subclasses. That
+    function must return a :class:`socketserver.BaseServer` instance. The Worker
+    will then perform the equivalent of calling its
+    :meth:`serve_forever <socketserver.BaseServer.serve_forever>` method.
+    """
 
     final_states = (
         Service.State.STOPPED, Service.State.STOPPING, Service.State.EXCEPTION)

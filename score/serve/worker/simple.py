@@ -5,6 +5,21 @@ from .worker import Worker
 
 
 class SimpleWorker(Worker):
+    """
+    A simplified worker base class, that hides all the ugly threading logic.
+
+    You can subclass this and implement a ``loop`` function that periodically
+    checks this.running:
+
+    .. code-block:: python
+
+        class Spammer(SimpleWorker):
+
+            def loop():
+                while self.running:
+                    print('spam!')
+                    time.sleep(1)
+    """
 
     def __init__(self):
         self.__lock = threading.Lock()

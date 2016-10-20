@@ -28,6 +28,21 @@ invalid_transitions = {
 
 
 def transitions(state1, state2=None):
+    """
+    This annotation can add additional transitions to a class.
+
+    If your worker is capable of going from RUNNING to STOPPED, for example, you
+    can add the additional transition to a new class method:
+
+    .. code-block:: python
+
+        class MyWorker(Worker):
+
+            @transitions(Service.State.RUNNING, Service.State.STOPPED)
+            def kill():
+                # ...
+    """
+
     def wrapper(func):
         nonlocal state1, state2
         if not hasattr(func, 'transitions'):
@@ -93,6 +108,11 @@ class WorkerMeta(abc.ABCMeta):
 
 
 class Worker(metaclass=WorkerMeta):
+    """
+    The implementation of a single service.
+
+    The worker will be wrapped in :class:`Service` objects before being started.
+    """
 
     @property
     def state(self):
@@ -100,29 +120,32 @@ class Worker(metaclass=WorkerMeta):
 
     @abc.abstractmethod
     def prepare(self):
-        # only called when in stopped state
-        # assumed to be paused when finished
-        pass
+        """
+        Implements the transition from STOPPED to PAUSED.
+        """
 
     @abc.abstractmethod
     def start(self):
-        # only called when in paused state
-        # assumed to be running when finished
-        pass
+        """
+        Implements the transition from PAUSED to RUNNING.
+        """
 
     @abc.abstractmethod
     def stop(self):
-        # can be called at any time, even during transitions
-        # assumed to be stopped when finished
-        pass
+        """
+        Implements the transition from PAUSED to STOPPED.
+        """
 
     @abc.abstractmethod
     def pause(self):
-        # only called when in running state
-        # assumed to be paused when finished
-        pass
+        """
+        Implements the transition from RUNNING to PAUSED.
+        """
 
     @abc.abstractmethod
     def cleanup(self, exception):
-        # only called when an exception occured
-        pass
+        """
+        Called when an exception occured. Due to the nature of threading, it is
+        not entirely clear, in which state the worker was, when this specific
+        exception occurred.
+        """
