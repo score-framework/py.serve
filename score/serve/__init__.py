@@ -25,10 +25,10 @@
 # Licensee has his registered seat, an establishment or assets.
 
 
-from ._init import init
+from ._init import init, ConfiguredServeModule
 from .worker import Worker, SocketServerWorker, SimpleWorker, transitions
 from .service import Service
 
 
-__all__ = ('init', 'Worker', 'SocketServerWorker', 'SimpleWorker',
-           'transitions', 'Service')
+__all__ = ('init', 'ConfiguredServeModule', 'Worker', 'SocketServerWorker',
+           'SimpleWorker', 'transitions', 'Service')
