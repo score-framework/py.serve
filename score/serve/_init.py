@@ -114,7 +114,6 @@ class _ServerInstance:
         self.loop.remove_signal_handler(signal.SIGINT)
 
     def __start_1(self):
-        self.__stopping = False
         task = self.loop.create_task(self.controller.pause())
         task.add_done_callback(self.__start_2)
 
@@ -127,7 +126,7 @@ class _ServerInstance:
     def signal_handler_stop(self):
         log.info('Ctrl+C detected, stopping')
         self.loop.remove_signal_handler(signal.SIGINT)
-        task = self.loop.create_task(self.controller.stop())
+        task = self.loop.create_task(self.stop())
         task.add_done_callback(self.stop_loop)
         self.reload = False
 
@@ -139,16 +138,19 @@ class _ServerInstance:
         self.stop_loop()
 
     @asyncio.coroutine
-    def restart(self):
-        self.reload = True
+    def stop(self):
         yield from self.controller.stop()
-        self.stop_loop()
+        yield from self.controller.kill()
+
+    @asyncio.coroutine
+    def restart(self):
+        yield from self.stop()
+        self.reload = True
 
     def stop_loop(self, future=None):
-        if self.__stopping and not future:
-            return
-        self.__stopping = True
         if future:
+            # collect the task exception, otherwise the asyncio library will
+            # complain
             future.exception()
         pending_tasks = [t for t in asyncio.Task.all_tasks(self.loop)
                          if not t.done()]
