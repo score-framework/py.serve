@@ -29,7 +29,7 @@ from ._init import init, ConfiguredServeModule
 from .worker import Worker, SocketServerWorker, SimpleWorker, transitions
 from .service import Service
 
-__version__ = '0.1.4'
+__version__ = '0.1.5'
 
 __all__ = ('init', 'ConfiguredServeModule', 'Worker', 'SocketServerWorker',
            'SimpleWorker', 'transitions', 'Service')
