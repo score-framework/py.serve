@@ -110,6 +110,7 @@ class _ServerInstance:
         # self.loop.set_debug(True)
         self.loop.add_signal_handler(signal.SIGINT, self.signal_handler_stop)
         self.__start_1()
+        self.__stopping = False
         self.loop.run_forever()
         self.loop.remove_signal_handler(signal.SIGINT)
 
@@ -141,13 +142,17 @@ class _ServerInstance:
     def stop(self):
         yield from self.controller.stop()
         yield from self.controller.kill()
+        self.stop_loop()
 
     @asyncio.coroutine
     def restart(self):
-        yield from self.stop()
         self.reload = True
+        yield from self.stop()
 
     def stop_loop(self, future=None):
+        if future is None and self.__stopping:
+            return
+        self.__stopping = True
         if future:
             # collect the task exception, otherwise the asyncio library will
             # complain
