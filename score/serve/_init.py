@@ -36,9 +36,15 @@ from contextlib import contextmanager
 import traceback
 import signal
 import logging
+try:
+    import uvloop
+except ImportError:
+    pass
+else:
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+
 
 log = logging.getLogger('score.serve')
-
 
 defaults = {
     'autoreload': False,
