@@ -177,6 +177,9 @@ Workers
 
 .. autoclass:: score.serve.SocketServerWorker
 
+.. autoclass:: score.serve.AsyncioWorker
+    :members:
+
 Service
 -------
 
