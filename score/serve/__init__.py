@@ -30,7 +30,7 @@ from .worker import (
     Worker, SocketServerWorker, SimpleWorker, AsyncioWorker, transitions)
 from .service import Service
 
-__version__ = '0.1.6'
+__version__ = '0.1.7'
 
 __all__ = ('init', 'ConfiguredServeModule', 'Worker', 'SocketServerWorker',
            'SimpleWorker', 'AsyncioWorker', 'transitions', 'Service')
