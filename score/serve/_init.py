@@ -111,7 +111,7 @@ class _ServerInstance:
         self.controller = fork(self.loop, ServiceController, self.conf)
         if self.conf.autoreload:
             self.controller.on('restart', self.restart)
-        self.reload = False
+        self.reload = None
         self.controller.on('state-change', self.quit_if_stopped)
         # self.loop.set_debug(True)
         self.loop.add_signal_handler(signal.SIGINT, self.signal_handler_stop)
@@ -133,43 +133,84 @@ class _ServerInstance:
     def signal_handler_stop(self):
         log.info('Ctrl+C detected, stopping')
         self.loop.remove_signal_handler(signal.SIGINT)
-        task = self.loop.create_task(self.stop())
-        task.add_done_callback(self.stop_loop)
+        self.loop.create_task(self.stop())
         self.reload = False
 
+    @asyncio.coroutine
+    def stop(self):
+        if self.__stopping:
+            return
+        self.__stopping = True
+        event = asyncio.Event(loop=self.loop)
+
+        def signal_if_all_stopped(states):
+            if not self.all_services_stopped(states):
+                return
+            self.controller.off('state-change', signal_if_all_stopped)
+            task = self.loop.create_task(self.controller.kill())
+            task.add_done_callback(wait_on_pending_tasks)
+
+        def wait_on_pending_tasks(future):
+            coro = self.wait_on_pending_tasks([current_task])
+            task = self.loop.create_task(coro)
+            task.add_done_callback(signal_done)
+
+        def signal_done(future):
+            event.set()
+
+        def stop_loop(future):
+            self.loop.stop()
+
+        current_task = asyncio.Task.current_task(loop=self.loop)
+        current_task.add_done_callback(stop_loop)
+        states = yield from self.controller.service_states()
+        if not self.all_services_stopped(states):
+            self.controller.off('state-change', self.quit_if_stopped)
+            self.controller.on('state-change', signal_if_all_stopped)
+            yield from self.controller.stop()
+            yield from event.wait()
+
+    def all_services_stopped(self, states):
+        if isinstance(states, dict):
+            states = states.values()
+        return all(state in (Service.State.STOPPED, Service.State.EXCEPTION)
+                   for state in states)
+
     def quit_if_stopped(self, states):
-        if not all(state in (Service.State.STOPPED, Service.State.EXCEPTION)
-                   for state in states.values()):
+        if not self.all_services_stopped(states):
             return
         self.controller.off('state-change', self.quit_if_stopped)
         self.stop_loop()
 
-    @asyncio.coroutine
-    def stop(self):
-        yield from self.controller.stop()
-        yield from self.controller.kill()
-        self.stop_loop()
-
-    @asyncio.coroutine
     def restart(self):
-        self.reload = True
-        yield from self.stop()
+        if self.reload is None:
+            self.reload = True
+        self.loop.create_task(self.stop())
 
-    def stop_loop(self, future=None):
-        if future is None and self.__stopping:
-            return
-        self.__stopping = True
-        if future:
-            # collect the task exception, otherwise the asyncio library will
-            # complain
-            future.exception()
-        pending_tasks = [t for t in asyncio.Task.all_tasks(self.loop)
-                         if not t.done()]
-        if not pending_tasks:
-            self.loop.stop()
-        else:
+    @asyncio.coroutine
+    def wait_on_pending_tasks(self, ignored_tasks=None):
+        event = asyncio.Event(loop=self.loop)
+        if ignored_tasks is None:
+            ignored_tasks = []
+        ignored_tasks.append(asyncio.Task.current_task(loop=self.loop))
+
+        def check_pending(future=None):
+            if future:
+                # collect the task exception, otherwise the asyncio library will
+                # complain
+                future.exception()
+            pending_tasks = [t for t in asyncio.Task.all_tasks(self.loop)
+                             if not t.done()]
+            if len(pending_tasks) <= len(ignored_tasks):
+                event.set()
+                return
             task = pending_tasks.pop()
-            task.add_done_callback(self.stop_loop)
+            while task in ignored_tasks:
+                task = pending_tasks.pop()
+            task.add_done_callback(check_pending)
+
+        check_pending()
+        yield from event.wait()
 
 
 class ServiceController(Backgrounded):
