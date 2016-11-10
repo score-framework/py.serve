@@ -36,6 +36,7 @@ from contextlib import contextmanager
 import traceback
 import signal
 import logging
+from .worker import Worker
 try:
     import uvloop
 except ImportError:
@@ -295,14 +296,23 @@ class ServiceController(Backgrounded):
                 self._changedetector.observe(file)
         for mod in self.conf.modules:
             workers = score._modules[mod].score_serve_workers()
-            if isinstance(workers, list):
-                for i, worker in enumerate(workers):
-                    name = '%s/%d' % (mod, i)
-                    self._services[name] = Service(name, worker)
+            if isinstance(workers, Worker):
+                self._services[mod] = Service(mod, workers)
+            elif isinstance(workers, list):
+                if len(workers) == 1:
+                    self._services[mod] = Service(mod, workers[0])
+                else:
+                    for i, worker in enumerate(workers):
+                        name = '%s/%d' % (mod, i)
+                        self._services[name] = Service(name, worker)
             elif isinstance(workers, dict):
                 for name, worker in workers.items():
                     name = '%s/%s' % (mod, name)
                     self._services[name] = Service(name, worker)
+            else:
+                raise RuntimeError(
+                    'Invalid return value of %s.score_serve_workers(): %s' %
+                    (mod, repr(workers)))
 
     def restart(self, *_):
         self.trigger('restart')
