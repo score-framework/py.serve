@@ -271,9 +271,9 @@ class ServiceController(Backgrounded):
                 service.register_state_change_listener(
                     self._service_state_changed)
         except Exception as e:
+            self.conf.log.exception(e)
             if self._changedetector:
                 self._services.clear()
-                self.conf.log.exception(e)
                 if isinstance(e, SyntaxError):
                     self._changedetector.observe(e.filename)
                 else:
