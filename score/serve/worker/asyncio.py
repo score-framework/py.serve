@@ -30,8 +30,10 @@ class AsyncioWorker(Worker):
     """
 
     def prepare(self):
-        threading.Thread(target=self.__start_loop).start()
         event = threading.Event()
+        threading.Thread(target=self.__start_loop, args=(event,)).start()
+        event.wait()
+        event.clear()
         future = asyncio.run_coroutine_threadsafe(self.__prepare(), self.loop)
         future.add_done_callback(lambda future: event.set())
         exception = future.exception()
@@ -126,8 +128,9 @@ class AsyncioWorker(Worker):
         """
         pass
 
-    def __start_loop(self):
+    def __start_loop(self, event):
         self.loop = asyncio.new_event_loop()
+        event.set()
         self.loop.run_forever()
 
     @asyncio.coroutine
