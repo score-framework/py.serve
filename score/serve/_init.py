@@ -181,7 +181,7 @@ class _ServerInstance:
         if not self.all_services_stopped(states):
             return
         self.controller.off('state-change', self.quit_if_stopped)
-        self.stop_loop()
+        self.loop.create_task(self.stop())
 
     def restart(self):
         if self.reload is None:
