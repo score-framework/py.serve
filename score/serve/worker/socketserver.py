@@ -22,6 +22,9 @@ class SocketServerWorker(Worker):
     final_states = (
         Service.State.STOPPED, Service.State.STOPPING, Service.State.EXCEPTION)
 
+    running_states = (
+        Service.State.STARTING, Service.State.RUNNING)
+
     def __init__(self):
         self.__server = None
         self.__num_running = 0
@@ -69,7 +72,7 @@ class SocketServerWorker(Worker):
         while self.state not in self.final_states:
             try:
                 with self.__request_lock:
-                    if self.state == Service.State.RUNNING:
+                    if self.state in self.running_states:
                         sockets = (self.__server.socket, self.__intr_pair[0],)
                     else:
                         sockets = (self.__intr_pair[0],)
