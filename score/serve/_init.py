@@ -295,32 +295,36 @@ class ServiceController(Backgrounded):
             for file in parse_list(score.conf['score.init']['_files']):
                 self._changedetector.observe(file)
         for desc in self.conf.modules:
-            if ':' in desc:
-                mod, names = tuple(map(str.strip, desc.split(':', 1)))
-                names = tuple(map(str.strip, names.split(',')))
-            else:
-                mod = desc
-                names = None
-            workers = score._modules[mod].score_serve_workers()
-            if isinstance(workers, Worker):
-                self._services[mod] = Service(mod, workers)
-            elif isinstance(workers, list):
-                if len(workers) == 1:
-                    self._services[mod] = Service(mod, workers[0])
-                else:
-                    for i, worker in enumerate(workers):
-                        name = '%s/%d' % (mod, i)
-                        self._services[name] = Service(name, worker)
-            elif isinstance(workers, dict):
-                for name, worker in workers.items():
-                    if names is not None and name not in names:
-                        continue
-                    name = '%s/%s' % (mod, name)
-                    self._services[name] = Service(name, worker)
-            else:
-                raise RuntimeError(
-                    'Invalid return value of %s.score_serve_workers(): %s' %
-                    (mod, repr(workers)))
+            for name, worker in self._iter_workers(score, desc):
+                self._services[name] = Service(name, worker)
+
+    def _iter_workers(self, score, descriptor):
+        if ':' in descriptor:
+            module, names = tuple(map(str.strip, descriptor.split(':', 1)))
+            names = tuple(map(str.strip, names.split(',')))
+        else:
+            module = descriptor
+            names = None
+        response = score._modules[module].score_serve_workers()
+        if isinstance(response, Worker):
+            yield module, response
+        elif isinstance(response, list):
+            if len(response) == 1:
+                yield module, response[0]
+                return
+            for i, worker in enumerate(response):
+                name = '%s/%d' % (module, i)
+                yield name, worker
+        elif isinstance(response, dict):
+            for name, worker in response.items():
+                if names is not None and name not in names:
+                    continue
+                name = '%s/%s' % (module, name)
+                yield name, worker
+        else:
+            raise RuntimeError(
+                'Invalid return value of %s.score_serve_workers(): %s' %
+                (module, repr(response)))
 
     def restart(self, *_):
         self.trigger('restart')
