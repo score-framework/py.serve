@@ -294,7 +294,13 @@ class ServiceController(Backgrounded):
         if self._changedetector:
             for file in parse_list(score.conf['score.init']['_files']):
                 self._changedetector.observe(file)
-        for mod in self.conf.modules:
+        for desc in self.conf.modules:
+            if ':' in desc:
+                mod, names = tuple(map(str.strip, desc.split(':', 1)))
+                names = tuple(map(str.strip, names.split(',')))
+            else:
+                mod = desc
+                names = None
             workers = score._modules[mod].score_serve_workers()
             if isinstance(workers, Worker):
                 self._services[mod] = Service(mod, workers)
@@ -307,6 +313,8 @@ class ServiceController(Backgrounded):
                         self._services[name] = Service(name, worker)
             elif isinstance(workers, dict):
                 for name, worker in workers.items():
+                    if names is not None and name not in names:
+                        continue
                     name = '%s/%s' % (mod, name)
                     self._services[name] = Service(name, worker)
             else:
