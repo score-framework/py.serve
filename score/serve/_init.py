@@ -26,7 +26,7 @@
 
 import asyncio
 from score.init import (
-    ConfiguredModule, parse_list, parse_bool, init_from_file,
+    ConfiguredModule, parse_list, parse_bool, parse_host_port, init_from_file,
     InitializationError)
 from .service import Service
 from ._forked import fork, Backgrounded
@@ -49,7 +49,8 @@ log = logging.getLogger('score.serve')
 
 defaults = {
     'autoreload': False,
-    'modules': []
+    'modules': [],
+    'monitor': None,
 }
 
 
@@ -77,7 +78,11 @@ def init(confdict):
         import score.serve
         raise InitializationError(score.serve, 'No modules configured')
     autoreload = parse_bool(conf['autoreload'])
-    return ConfiguredServeModule(conf['conf'], modules, autoreload)
+    monitor_host_port = None
+    if conf['monitor']:
+        monitor_host_port = parse_host_port(conf['monitor'])
+    return ConfiguredServeModule(conf['conf'], modules, autoreload,
+                                 monitor_host_port)
 
 
 class ConfiguredServeModule(ConfiguredModule):
@@ -85,12 +90,15 @@ class ConfiguredServeModule(ConfiguredModule):
     This module's :class:`configuration class`
     """
 
-    def __init__(self, conf, modules, autoreload):
+    def __init__(self, conf, modules, autoreload, monitor_host_port):
         import score.serve
         ConfiguredModule.__init__(self, score.serve)
         self.conf = conf
         self.modules = modules
         self.autoreload = autoreload
+        self.monitor_connections = []
+        self.monitor_host_port = monitor_host_port
+        self.loop = asyncio.new_event_loop()
 
     def start(self):
         """
@@ -98,18 +106,46 @@ class ConfiguredServeModule(ConfiguredModule):
         <CTRL-C> ist pressed. Will optionally reload the server, if it was
         configured to do so via ``autoreload``.
         """
-        reload = _ServerInstance(self).reload
-        while reload:
-            log.info('reloading')
-            reload = _ServerInstance(self).reload
+        if self.monitor_host_port:
+            coroutine = self.loop.create_server(self._create_monitor_connection,
+                                                host=self.monitor_host_port[0],
+                                                port=self.monitor_host_port[1])
+            self.loop.create_task(coroutine)
+        restart_server = True
+        while restart_server:
+            self.instance = _ServerInstance(self)
+            for connection in self.monitor_connections:
+                connection.set_instance(self.instance)
+            self.instance.run_until_stopped()
+            reload = self.instance.reload
+            self.instance = None
+            for connection in self.monitor_connections:
+                connection.clear_instance(reload)
+            if reload:
+                log.info('reloading')
+            else:
+                restart_server = False
+
+    def _create_monitor_connection(self):
+        from .monitor import ServiceMonitorProtocol
+        connection = ServiceMonitorProtocol(self)
+        if self.instance:
+            connection.set_instance(self.instance)
+        self.monitor_connections.append(connection)
+        return connection
+
+    def _remove_monitor_connection(self, connection):
+        self.monitor_connections.remove(connection)
 
 
 class _ServerInstance:
 
     def __init__(self, conf):
         self.conf = conf
-        self.loop = asyncio.new_event_loop()
+        self.loop = conf.loop
         self.controller = fork(self.loop, ServiceController, self.conf)
+
+    def run_until_stopped(self):
         if self.conf.autoreload:
             self.controller.on('restart', self.restart)
         self.reload = None
