@@ -24,6 +24,7 @@
 # the discretion of STRG.AT GmbH also the competent court, in whose district the
 # Licensee has his registered seat, an establishment or assets.
 
+import socket
 import asyncio
 from score.init import (
     ConfiguredModule, parse_list, parse_bool, parse_host_port, init_from_file,
@@ -99,6 +100,20 @@ class ConfiguredServeModule(ConfiguredModule):
         self.monitor_connections = []
         self.monitor_host_port = monitor_host_port
         self.loop = asyncio.new_event_loop()
+        self.loop.getaddrinfo = self._getaddrinfo
+
+    def _getaddrinfo(self, host, port, *, family=0, type=0, proto=0, flags=0):
+        """
+        The default loop implementation uses loop.run_in_executor to resolve
+        addresses, which in turn uses a ThreadPoolExecutor or a
+        ProcessPoolExecutor. Neither of these executors is feasable, since
+        forking would break both of them. This is the reason we are resolving
+        hostnames synchronously.
+        """
+        @asyncio.coroutine
+        def getaddrinfo():
+            return socket.getaddrinfo(host, port, family, type, proto, flags)
+        return getaddrinfo()
 
     def start(self):
         """
@@ -195,17 +210,14 @@ class _ServerInstance:
         def signal_done(future):
             event.set()
 
-        def stop_loop(future):
-            self.loop.stop()
-
         current_task = asyncio.Task.current_task(loop=self.loop)
-        current_task.add_done_callback(stop_loop)
         states = yield from self.controller.service_states()
         if not self.all_services_stopped(states):
             self.controller.off('state-change', self.quit_if_stopped)
             self.controller.on('state-change', signal_if_all_stopped)
             yield from self.controller.stop()
             yield from event.wait()
+        self.loop.stop()
 
     def all_services_stopped(self, states):
         if isinstance(states, dict):
