@@ -1,4 +1,4 @@
-# Copyright © 2015,2016 STRG.AT GmbH, Vienna, Austria
+# Copyright © 2015-2017 STRG.AT GmbH, Vienna, Austria
 #
 # This file is part of the The SCORE Framework.
 #
@@ -30,7 +30,7 @@ from .worker import (
     Worker, SocketServerWorker, SimpleWorker, AsyncioWorker, transitions)
 from .service import Service
 
-__version__ = '0.1.10'
+__version__ = '0.1.11'
 
 __all__ = ('init', 'ConfiguredServeModule', 'Worker', 'SocketServerWorker',
            'SimpleWorker', 'AsyncioWorker', 'transitions', 'Service')
