@@ -2,6 +2,33 @@ import abc
 import threading
 import asyncio
 from .worker import Worker
+import concurrent.futures
+
+try:
+    from asyncio import run_coroutine_threadsafe
+except ImportError:
+
+    def run_coroutine_threadsafe(coro, loop):
+        future = concurrent.futures.Future()
+
+        def done(task_future):
+            exception = task_future.exception()
+            if exception:
+                future.set_exception(exception)
+            else:
+                future.set_result(task_future.result())
+
+        def queue_task():
+            try:
+                task_future = asyncio.async(coro, loop=loop)
+                task_future.add_done_callback(done)
+            except Exception as exc:
+                if future.set_running_or_notify_cancel():
+                    future.set_exception(exc)
+                raise
+
+        loop.call_soon_threadsafe(queue_task)
+        return future
 
 
 class AsyncioWorker(Worker):
@@ -33,7 +60,7 @@ class AsyncioWorker(Worker):
         threading.Thread(target=self.__start_loop, args=(event,)).start()
         event.wait()
         event.clear()
-        future = asyncio.run_coroutine_threadsafe(self.__prepare(), self.loop)
+        future = run_coroutine_threadsafe(self.__prepare(), self.loop)
         future.add_done_callback(lambda future: event.set())
         exception = future.exception()
         if exception:
@@ -42,7 +69,7 @@ class AsyncioWorker(Worker):
 
     def start(self):
         event = threading.Event()
-        future = asyncio.run_coroutine_threadsafe(self.__start(), self.loop)
+        future = run_coroutine_threadsafe(self.__start(), self.loop)
         future.add_done_callback(lambda future: event.set())
         exception = future.exception()
         if exception:
@@ -51,7 +78,7 @@ class AsyncioWorker(Worker):
 
     def pause(self):
         event = threading.Event()
-        future = asyncio.run_coroutine_threadsafe(self.__pause(), self.loop)
+        future = run_coroutine_threadsafe(self.__pause(), self.loop)
         future.add_done_callback(lambda future: event.set())
         exception = future.exception()
         if exception:
@@ -64,7 +91,7 @@ class AsyncioWorker(Worker):
             self.loop.call_soon_threadsafe(self.__stop_loop, event)
 
         event = threading.Event()
-        future = asyncio.run_coroutine_threadsafe(self.__stop(), self.loop)
+        future = run_coroutine_threadsafe(self.__stop(), self.loop)
         future.add_done_callback(stop_loop)
         exception = future.exception()
         if exception:
@@ -79,7 +106,7 @@ class AsyncioWorker(Worker):
             self.loop.call_soon_threadsafe(self.__stop_loop, event)
 
         event = threading.Event()
-        future = asyncio.run_coroutine_threadsafe(
+        future = run_coroutine_threadsafe(
             self.__cleanup(exception), self.loop)
         future.add_done_callback(stop_loop)
         event.wait()
