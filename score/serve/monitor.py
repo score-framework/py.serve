@@ -34,6 +34,8 @@ class ServiceMonitorProtocol(asyncio.Protocol):
 
     @asyncio.coroutine
     def _send_service_states_async(self):
+        if self.server is None:
+            return
         services = yield from self.server.controller.service_states()
         self._state_change(services)
 
