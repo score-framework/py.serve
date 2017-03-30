@@ -8,9 +8,30 @@ class ServiceMonitorProtocol(asyncio.Protocol):
     def __init__(self, conf):
         self._conf = conf
         self.server = None
+        self.input_buffer = b''
 
     def connection_made(self, transport):
         self.transport = transport
+
+    def data_received(self, data):
+        self.input_buffer = self.input_buffer + data
+        self.handle_input()
+
+    def handle_input(self):
+        lines = self.input_buffer.split(b'\n')
+        self.input_buffer = lines.pop()
+        if not self.server:
+            return
+        for command in lines:
+            command = command.strip()
+            if command == b'start':
+                self._conf.loop.create_task(self.server.controller.start())
+            elif command == b'restart':
+                self.server.restart()
+            elif command == b'pause':
+                self._conf.loop.create_task(self.server.controller.pause())
+            elif command == b'stop':
+                self._conf.loop.create_task(self.server.stop())
 
     def set_instance(self, server):
         assert self.server is None
