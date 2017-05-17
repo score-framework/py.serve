@@ -27,10 +27,12 @@
 
 from ._init import init, ConfiguredServeModule
 from .worker import (
-    Worker, SocketServerWorker, SimpleWorker, AsyncioWorker, transitions)
+    Worker, SocketServerWorker, SimpleWorker, AsyncioWorker, FileWatcherWorker,
+    transitions)
 from .service import Service
 
 __version__ = '0.1.11'
 
 __all__ = ('init', 'ConfiguredServeModule', 'Worker', 'SocketServerWorker',
-           'SimpleWorker', 'AsyncioWorker', 'transitions', 'Service')
+           'SimpleWorker', 'AsyncioWorker', 'FileWatcherWorker', 'transitions',
+           'Service')
