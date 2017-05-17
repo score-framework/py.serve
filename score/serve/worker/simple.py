@@ -21,12 +21,9 @@ class SimpleWorker(Worker):
                     time.sleep(1)
     """
 
-    def __init__(self):
+    def prepare(self):
         self.__lock = threading.Lock()
         self.__thread = None
-
-    def prepare(self):
-        pass
 
     def start(self):
         self.__thread = threading.Thread(target=self.__loop).start()
