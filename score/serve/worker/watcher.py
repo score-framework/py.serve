@@ -4,6 +4,7 @@ import watchdog.events
 import watchdog.utils
 import os
 import warnings
+import threading
 
 
 Observer = watchdog.observers.Observer
@@ -51,7 +52,7 @@ class FileWatcherWorker(Worker, watchdog.events.FileSystemEventHandler):
         if not os.path.exists(path):
             warnings.warn('Cannot watch "%s": path does not exist' % path)
             return
-        if os.path.is_file(path):
+        if os.path.isfile(path):
             dir = os.path.dirname(path)
             self.target_files.append(path)
         else:
@@ -59,20 +60,23 @@ class FileWatcherWorker(Worker, watchdog.events.FileSystemEventHandler):
             self.target_dirs.append(path)
         if dir in self.observed_dirs:
             return
-        for other in self.observed_dirs.copy():
-            if dir.startswith(other):
-                return
-            if other.startswith(dir):
-                if self.observer:
-                    self.observer.unschedule(self.observed_dirs[other])
-                del self.observed_dirs[other]
-        if self.observer:
-            self.observed_dirs[dir] = \
-                self.observer.schedule(self, dir, recursive=True)
-        else:
-            self.observed_dirs[dir] = None
+        with self._observer_lock:
+            for other in self.observed_dirs.copy():
+                if dir.startswith(other):
+                    return
+                if other.startswith(dir):
+                    if self.observer:
+                        self.observer.unschedule(self.observed_dirs[other])
+                    del self.observed_dirs[other]
+            if self.observer:
+                self.observed_dirs[dir] = \
+                    self.observer.schedule(self, dir, recursive=True)
+            else:
+                self.observed_dirs[dir] = None
 
     def prepare(self):
+        self._observer_lock = threading.Lock()
+        self.observer = None
         self.observed_dirs = {}
         self.target_files = []
         self.target_dirs = []
@@ -88,20 +92,21 @@ class FileWatcherWorker(Worker, watchdog.events.FileSystemEventHandler):
         pass
 
     def pause(self):
-        self.observer.stop()
+        with self._observer_lock:
+            self.observer.stop()
         self.observer.join()
         self.observer = None
 
     def cleanup(self, exception):
-        if hasattr(self, 'observer'):
-            self.observer.stop()
-            self.observer.join()
+        if hasattr(self, '_observer_lock'):
+            with self._observer_lock:
+                if hasattr(self, 'observer'):
+                    self.observer.stop()
+                    self.observer.join()
 
     def on_any_event(self, event):
         relevant = hasattr(event, 'src_path') and (
             event.src_path in self.target_files or
             any(event.src_path.startswith(dir) for dir in self.target_dirs))
-        if not relevant:
-            return
-        for callback in self.callbacks:
-            callback(event.src_path)
+        if relevant:
+            self.changed(event.src_path)
