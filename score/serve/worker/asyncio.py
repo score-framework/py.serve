@@ -55,7 +55,11 @@ class AsyncioWorker(Worker):
                 self.server.close()
     """
 
+    loop = None
+
     def prepare(self):
+        if self.loop is None:
+            self.loop = asyncio.new_event_loop()
         event = threading.Event()
         threading.Thread(target=self.__start_loop, args=(event,)).start()
         event.wait()
@@ -155,7 +159,6 @@ class AsyncioWorker(Worker):
         pass
 
     def __start_loop(self, event):
-        self.loop = asyncio.new_event_loop()
         event.set()
         self.loop.run_forever()
 
