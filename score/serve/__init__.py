@@ -31,7 +31,7 @@ from .worker import (
     transitions)
 from .service import Service
 
-__version__ = '0.1.14'
+__version__ = '0.1.15'
 
 __all__ = ('init', 'ConfiguredServeModule', 'Worker', 'SocketServerWorker',
            'SimpleWorker', 'AsyncioWorker', 'FileWatcherWorker', 'transitions',
