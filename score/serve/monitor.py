@@ -1,6 +1,7 @@
 import asyncio
 import json
 from collections import OrderedDict
+import warnings
 
 
 class ServiceMonitorProtocol(asyncio.Protocol):
@@ -32,6 +33,8 @@ class ServiceMonitorProtocol(asyncio.Protocol):
                 self._conf.loop.create_task(self.server.controller.pause())
             elif command == b'stop':
                 self._conf.loop.create_task(self.server.stop())
+            else:
+                warnings.warn('Received invalid command: ' + command)
 
     def set_instance(self, server):
         assert self.server is None
