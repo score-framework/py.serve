@@ -72,8 +72,15 @@ class ServiceMonitorProtocol(asyncio.Protocol):
         assert self.server is not None
         self.server.controller.off('state-change', self._state_change)
         self.server = None
+        if not self.transport:
+            return
+        if reloading:
+            self._send(json.dumps('reloading'))
+        else:
+            self._send(json.dumps('shutting down'))
 
     def connection_lost(self, exc):
+        self.transport = None
         if self.server:
             self.clear_instance(False)
         self._conf._remove_monitor_connection(self)
