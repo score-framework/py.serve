@@ -347,8 +347,8 @@ class ServiceController(Backgrounded):
                 self._services[name] = Service(name, worker)
 
     def _iter_workers(self, score, descriptor):
-        if ':' in descriptor:
-            module, names = tuple(map(str.strip, descriptor.split(':', 1)))
+        if '/' in descriptor:
+            module, names = tuple(map(str.strip, descriptor.split('/', 1)))
             names = tuple(map(str.strip, names.split(',')))
         else:
             module = descriptor
@@ -361,13 +361,13 @@ class ServiceController(Backgrounded):
                 yield module, response[0]
                 return
             for i, worker in enumerate(response):
-                name = '%s:%d' % (module, i)
+                name = '%s/%d' % (module, i)
                 yield name, worker
         elif isinstance(response, dict):
             for name, worker in response.items():
                 if names is not None and name not in names:
                     continue
-                name = '%s:%s' % (module, name)
+                name = '%s/%s' % (module, name)
                 yield name, worker
         else:
             raise RuntimeError(
