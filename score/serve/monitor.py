@@ -45,6 +45,8 @@ class ServiceMonitorProtocol(asyncio.Protocol):
         self.server = None
 
     def connection_lost(self, exc):
+        if self.server:
+            self.clear_instance(False)
         self._conf._remove_monitor_connection(self)
 
     def _state_change(self, services):
