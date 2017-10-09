@@ -82,7 +82,8 @@ class SocketServerWorker(Worker):
                     continue
             except InterruptedError:
                 continue
-            self._process_request()
+            if self.__server.socket in r:
+                self._process_request()
         self.__server.server_close()
         self.__server = None
 
