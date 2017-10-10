@@ -25,7 +25,7 @@
 # Licensee has his registered seat, an establishment or assets.
 
 import click
-from score.init import parse_config_file, init as score_init
+from score.init import parse_config_file, parse_list, init as score_init
 
 
 @click.command('serve')
@@ -56,3 +56,20 @@ def main(clickctx):
     except KeyError:
         pass
     score.serve.start()
+
+
+def init_score(clickctx):
+    conf = parse_config_file(clickctx.obj['conf'].path)
+    try:
+        modules = parse_list(conf['score.init']['modules'])
+    except KeyError:
+        modules = []
+    modules.append('score.serve')
+    if 'score.init' not in conf:
+        conf['score.init'] = {}
+    conf['score.init']['modules'] = modules
+    if 'serve' not in conf:
+        conf['serve'] = {}
+    if 'conf' not in conf['serve']:
+        conf['serve']['conf'] = clickctx.obj['conf'].path
+    return score_init(conf)
