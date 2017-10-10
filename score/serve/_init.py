@@ -102,6 +102,9 @@ class ConfiguredServeModule(ConfiguredModule):
         self.loop = asyncio.new_event_loop()
         self.loop.getaddrinfo = self._getaddrinfo
 
+    def _finalize(self, score):
+        self._score = score
+
     def _getaddrinfo(self, host, port, *, family=0, type=0, proto=0, flags=0):
         """
         The default loop implementation uses loop.run_in_executor to resolve
@@ -151,6 +154,41 @@ class ConfiguredServeModule(ConfiguredModule):
 
     def _remove_monitor_connection(self, connection):
         self.monitor_connections.remove(connection)
+
+    def _iter_workers(self):
+        for descriptor in self.modules:
+            if '/' in descriptor:
+                module, names = tuple(map(str.strip, descriptor.split('/', 1)))
+                names = tuple(map(str.strip, names.split(',')))
+            else:
+                module = descriptor
+                names = None
+            response = self._score._modules[module].score_serve_workers()
+            if isinstance(response, Worker):
+                yield module, response
+            elif isinstance(response, list):
+                if len(response) == 1:
+                    yield module, response[0]
+                else:
+                    for i, worker in enumerate(response):
+                        name = '%s/%d' % (module, i)
+                        yield name, worker
+            elif isinstance(response, dict):
+                for name, worker in response.items():
+                    if names is not None and name not in names:
+                        continue
+                    name = '%s/%s' % (module, name)
+                    yield name, worker
+            else:
+                raise RuntimeError(
+                    'Invalid return value of %s.score_serve_workers(): %s' %
+                    (module, repr(response)))
+
+    @property
+    def workers(self):
+        if not hasattr(self, '_workers'):
+            self._workers = list(self._iter_workers())
+        return self._workers
 
 
 class _ServerInstance:
