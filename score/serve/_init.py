@@ -129,8 +129,7 @@ class ConfiguredServeModule(ConfiguredModule):
                                                 host=self.monitor_host_port[0],
                                                 port=self.monitor_host_port[1])
             self.loop.create_task(coroutine)
-        restart_server = True
-        while restart_server:
+        while True:
             self.instance = _ServerInstance(self)
             for connection in self.monitor_connections:
                 connection.set_instance(self.instance)
@@ -139,10 +138,9 @@ class ConfiguredServeModule(ConfiguredModule):
             self.instance = None
             for connection in self.monitor_connections:
                 connection.clear_instance(reload)
-            if reload:
-                log.info('reloading')
-            else:
-                restart_server = False
+            if not reload:
+                break
+            log.info('reloading')
 
     def _create_monitor_connection(self):
         from .monitor import ServiceMonitorProtocol
@@ -211,12 +209,15 @@ class _ServerInstance:
         self.loop.remove_signal_handler(signal.SIGINT)
 
     def __start_1(self):
+        # make sure that all services are in PAUSED state first.
+        # we will start them all at once afterwards.
         task = self.loop.create_task(self.controller.pause())
         task.add_done_callback(self.__start_2)
 
     def __start_2(self, future):
         exc = future.exception()
         if not exc:
+            # start all services at once
             task = self.loop.create_task(self.controller.start())
             task.add_done_callback(lambda *_: log.info('started'))
 
@@ -255,6 +256,10 @@ class _ServerInstance:
             self.controller.on('state-change', signal_if_all_stopped)
             yield from self.controller.stop()
             yield from event.wait()
+        self.cleanup()
+
+    def cleanup(self):
+        self.controller.cleanup()
         self.loop.stop()
 
     def all_services_stopped(self, states):

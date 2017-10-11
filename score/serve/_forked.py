@@ -144,7 +144,8 @@ class Gateway:
         os.waitpid(self.childpid, 0)
         self.childpid = None
 
-    def __del__(self):
+    def cleanup(self):
+        self.loop.remove_reader(self.pipe.fileno())
         if self.childpid:
             os.kill(self.childpid, signal.SIGTERM)
 
