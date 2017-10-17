@@ -88,6 +88,8 @@ class ServiceMonitorProtocol(asyncio.Protocol):
     def _state_change(self, services):
         if not services:
             return
+        if not self.transport:
+            return
         services = OrderedDict((k, v.value) for k, v in services.items())
         self._send(json.dumps(services))
 
