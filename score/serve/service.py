@@ -33,7 +33,7 @@ import logging
 log = logging.getLogger(__name__)
 
 
-class State(enum.Enum):
+class ServiceState(enum.Enum):
     STOPPED = 'stopped'
     STARTING = 'starting'
     RUNNING = 'running'
@@ -44,14 +44,14 @@ class State(enum.Enum):
     EXCEPTION = 'exception'
 
 
-STOPPED = State.STOPPED
-STARTING = State.STARTING
-RUNNING = State.RUNNING
-PAUSING = State.PAUSING
-PREPARING = State.PREPARING
-PAUSED = State.PAUSED
-STOPPING = State.STOPPING
-EXCEPTION = State.EXCEPTION
+STOPPED = ServiceState.STOPPED
+STARTING = ServiceState.STARTING
+RUNNING = ServiceState.RUNNING
+PAUSING = ServiceState.PAUSING
+PREPARING = ServiceState.PREPARING
+PAUSED = ServiceState.PAUSED
+STOPPING = ServiceState.STOPPING
+EXCEPTION = ServiceState.EXCEPTION
 
 
 intermediate_states = {
@@ -66,7 +66,7 @@ class Service:
     worrying about threading.
     """
 
-    State = globals()['State']
+    State = globals()['ServiceState']
 
     def __init__(self, name, worker):
         self.name = name
