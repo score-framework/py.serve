@@ -114,6 +114,8 @@ class Worker(metaclass=WorkerMeta):
     The worker will be wrapped in :class:`Service` objects before being started.
     """
 
+    state_listeners = set()
+
     @property
     def state(self):
         return self.service.state
@@ -149,3 +151,26 @@ class Worker(metaclass=WorkerMeta):
         not entirely clear, in which state the worker was, when this specific
         exception occurred.
         """
+
+    def register_state_change_listener(self, callback):
+        """
+        Registers a `callable` that will be invoked whenever the state of this
+        worker changes. The *callback* will receive three arguments:
+
+        * a :class:`Service <score.serve.service.Service>` wrapping this worker,
+        * the old :class:`state <score.serve.service.State>` and
+        * the new (current) state.
+
+        Note, that due to the nature of threading, it is possible that the
+        Service is already in another state than the one provided as the third
+        argument.
+        """
+        if not self.state_listeners:
+            self.state_listeners = set()
+        self.state_listeners.add(callback)
+
+    def unregister_state_change_listener(self, callback):
+        """
+        Removes a previously registered listener.
+        """
+        self.state_listeners.discard(callback)

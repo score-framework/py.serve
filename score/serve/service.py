@@ -206,6 +206,8 @@ class Service:
             log.exception(self.exception)
         for callback in self.state_listeners:
             callback(self, old, new)
+        for callback in self.worker.state_listeners:
+            callback(self, old, new)
         with self.state_lock:
             if self._next_state:
                 log.debug('  next state: %s' % (self._next_state))
