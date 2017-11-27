@@ -220,6 +220,9 @@ class _ServerInstance:
             # start all services at once
             task = self.loop.create_task(self.controller.start())
             task.add_done_callback(lambda *_: log.info('started'))
+        elif not self.conf.autoreload:
+            self.loop.remove_signal_handler(signal.SIGINT)
+            self.loop.create_task(self.stop())
 
     def signal_handler_stop(self):
         log.info('Ctrl+C detected, stopping')
