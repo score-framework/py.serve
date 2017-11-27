@@ -66,28 +66,28 @@ class AsyncioWorker(Worker):
         event.clear()
         future = run_coroutine_threadsafe(self.__prepare(), self.loop)
         future.add_done_callback(lambda future: event.set())
+        event.wait()
         exception = future.exception()
         if exception:
             raise exception
-        event.wait()
 
     def start(self):
         event = threading.Event()
         future = run_coroutine_threadsafe(self.__start(), self.loop)
         future.add_done_callback(lambda future: event.set())
+        event.wait()
         exception = future.exception()
         if exception:
             raise exception
-        event.wait()
 
     def pause(self):
         event = threading.Event()
         future = run_coroutine_threadsafe(self.__pause(), self.loop)
         future.add_done_callback(lambda future: event.set())
+        event.wait()
         exception = future.exception()
         if exception:
             raise exception
-        event.wait()
 
     def stop(self):
 
@@ -97,10 +97,10 @@ class AsyncioWorker(Worker):
         event = threading.Event()
         future = run_coroutine_threadsafe(self.__stop(), self.loop)
         future.add_done_callback(stop_loop)
+        event.wait()
         exception = future.exception()
         if exception:
             raise exception
-        event.wait()
 
     def cleanup(self, exception):
         if not self.loop.is_running():
