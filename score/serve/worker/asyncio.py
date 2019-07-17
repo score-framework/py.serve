@@ -20,7 +20,7 @@ except ImportError:
 
         def queue_task():
             try:
-                task_future = asyncio.async(coro, loop=loop)
+                task_future = getattr(asyncio, 'async')(coro, loop=loop)
                 task_future.add_done_callback(done)
             except Exception as exc:
                 if future.set_running_or_notify_cancel():
