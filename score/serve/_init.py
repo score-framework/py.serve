@@ -69,8 +69,8 @@ def init(confdict):
     :confkey:`modules`
         The :func:`list <score.init.parse_list>` of modules to serve. This need
         to be a list of module aliases, i.e. the same name, with which you
-        configured the module with ("score.http" becomes "http" if not specified
-        otherwise.)
+        configured the module with ("score.http" becomes "http" if not
+        specified otherwise.)
 
     """
     conf = defaults.copy()
@@ -126,9 +126,10 @@ class ConfiguredServeModule(ConfiguredModule):
         configured to do so via ``autoreload``.
         """
         if self.monitor_host_port:
-            coroutine = self.loop.create_server(self._create_monitor_connection,
-                                                host=self.monitor_host_port[0],
-                                                port=self.monitor_host_port[1])
+            coroutine = self.loop.create_server(
+                self._create_monitor_connection,
+                host=self.monitor_host_port[0],
+                port=self.monitor_host_port[1])
             self.loop.create_task(coroutine)
         while True:
             self.instance = _ServerInstance(self)
@@ -292,8 +293,8 @@ class _ServerInstance:
 
         def check_pending(future=None):
             if future:
-                # collect the task exception, otherwise the asyncio library will
-                # complain
+                # collect the task exception, otherwise the asyncio library
+                # will complain
                 future.exception()
             pending_tasks = [t for t in asyncio.Task.all_tasks(self.loop)
                              if not t.done()]

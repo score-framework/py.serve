@@ -44,8 +44,8 @@ if Observer.__name__ == 'InotifyObserver':
 
     # The inotify original observer has a small delay for pairing IN_MOVED_FROM
     # and IN_MOVE_TO events. Since we do not care whether something was moved
-    # *into* or *out of* our watches, we will override this behaviour to achieve
-    # the fastest possible reload times.
+    # *into* or *out of* our watches, we will override this behaviour to
+    # achieve the fastest possible reload times.
 
     class InotifyBuffer(watchdog.observers.inotify.InotifyBuffer):
 
@@ -150,8 +150,8 @@ class ChangeDetector(watchdog.events.FileSystemEventHandler):
         if self.running:
             # safeguarding against startup errors: self.observer.schedule fails
             # with errno EBADF (bad file descriptor) if the thread is not
-            # running.  this happens most commonly when the Worker has a startup
-            # issue, when lots of new watches are added.
+            # running.  this happens most commonly when the Worker has a
+            # startup issue, when lots of new watches are added.
             with self._observer_lock:
                 for other in self.observed_dirs.copy():
                     if dir.startswith(other):
