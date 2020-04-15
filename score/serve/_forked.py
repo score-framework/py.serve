@@ -39,7 +39,19 @@ pickling_support.install()
 
 def fork(loop, cls, *args, **kwargs):
     parent_pipe, child_pipe = multiprocessing.Pipe()
-    assert threading.active_count() == 1, "Cannot fork when using threads"
+    if threading.active_count() > 1:
+        # Cannot use os.fork() on linux when using threads, so we will try
+        # instructing the multiprocessing module to use the 'spawn' method
+        # instead.
+        start_method = multiprocessing.get_start_method(allow_none=True)
+        if start_method is None:
+            available_start_methods = multiprocessing.get_all_start_methods()
+            default_start_method = available_start_methods[0]
+            if default_start_method == 'fork':
+                multiprocessing.set_start_method("spawn")
+        elif start_method == 'fork':
+            raise RuntimeError(
+                'Cannot fork using start_method "fork" when using threads')
     childpid = os.fork()
     if childpid:
         return Gateway(loop, cls, childpid, parent_pipe)
