@@ -34,7 +34,8 @@ import logging
 log = logging.getLogger(__name__)
 
 
-class ServiceState(enum.Enum):
+@enum.unique
+class ServiceState(str, enum.Enum):
     STOPPED = 'stopped'
     STARTING = 'starting'
     RUNNING = 'running'
