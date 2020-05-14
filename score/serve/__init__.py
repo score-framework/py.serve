@@ -30,10 +30,10 @@ from ._init import init, ConfiguredServeModule
 from .worker import (
     Worker, SocketServerWorker, SimpleWorker, AsyncioWorker, FileWatcherWorker,
     transitions)
-from .service import Service
+from .service import Service, ServiceState
 
 __version__ = '0.1.23'
 
 __all__ = ('init', 'ConfiguredServeModule', 'Worker', 'SocketServerWorker',
            'SimpleWorker', 'AsyncioWorker', 'FileWatcherWorker', 'transitions',
-           'Service')
+           'Service', 'ServiceState')
