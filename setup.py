@@ -63,7 +63,7 @@ setup(
     ],
     install_requires=[
         'score.init >= 0.3.9',
-        'watchdog',
+        'watchdog <= 0.10.4',
         'tblib',
     ],
     entry_points={
