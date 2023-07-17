@@ -198,7 +198,11 @@ class AsyncioWorker(Worker):
             return
 
         def stop(future=None):
-            pending_tasks = [t for t in asyncio.Task.all_tasks(self.loop)
+            if hasattr(asyncio, 'all_tasks'):
+                all_tasks = asyncio.all_tasks(loop=self.loop)
+            else:
+                all_tasks = asyncio.Task.all_tasks(loop=self.loop)
+            pending_tasks = [t for t in all_tasks
                              if not t.done()]
             if pending_tasks:
                 task = pending_tasks.pop()

@@ -254,7 +254,7 @@ class _ServerInstance:
         def signal_done(future):
             event.set()
 
-        current_task = asyncio.Task.current_task(loop=self.loop)
+        current_task = self.__current_asyncio_task()
         states = yield from self.controller.service_states()
         if not self.all_services_stopped(states):
             self.controller.off('state-change', self.quit_if_stopped)
@@ -289,14 +289,14 @@ class _ServerInstance:
         event = asyncio.Event(loop=self.loop)
         if ignored_tasks is None:
             ignored_tasks = []
-        ignored_tasks.append(asyncio.Task.current_task(loop=self.loop))
+        ignored_tasks.append(self.__current_asyncio_task())
 
         def check_pending(future=None):
             if future:
                 # collect the task exception, otherwise the asyncio library
                 # will complain
                 future.exception()
-            pending_tasks = [t for t in asyncio.Task.all_tasks(self.loop)
+            pending_tasks = [t for t in self.__all_asyncio_task()
                              if not t.done()]
             if len(pending_tasks) <= len(ignored_tasks):
                 event.set()
@@ -308,6 +308,18 @@ class _ServerInstance:
 
         check_pending()
         yield from event.wait()
+
+    def __all_asyncio_task(self):
+        if hasattr(asyncio, 'all_tasks'):
+            return asyncio.all_tasks(loop=self.loop)
+        else:
+            return asyncio.Task.all_tasks(loop=self.loop)
+
+    def __current_asyncio_task(self):
+        if hasattr(asyncio, 'current_task'):
+            return asyncio.current_task(loop=self.loop)
+        else:
+            return asyncio.Task.current_task(loop=self.loop)
 
 
 class ServiceController(Backgrounded):
