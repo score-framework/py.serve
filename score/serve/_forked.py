@@ -34,6 +34,11 @@ import signal
 import sys
 from tblib import pickling_support
 
+try:
+    from types import coroutine
+except ImportError:
+    from asyncio import coroutine
+
 
 pickling_support.install()
 
@@ -113,7 +118,11 @@ class Gateway:
         self.responses = {}
         self.loop = loop
         self.loop.add_reader(self.pipe.fileno(), self._message_received)
-        self.event = asyncio.Event(loop=loop)
+        if sys.version_info.major == 3 and sys.version_info.minor < 10:
+            self.event = asyncio.Event(loop=loop)
+        else:
+            # The loop kwarg was removed in Python 3.10
+            self.event = asyncio.Event()
         self.callbacks = {}
 
     def on(self, event, callback):
@@ -144,7 +153,7 @@ class Gateway:
             self.responses[id] = (success, result)
             self.event.set()
 
-    @asyncio.coroutine
+    @coroutine
     def kill(self):
         if not self.childpid:
             return
@@ -176,7 +185,7 @@ class Gateway:
         setattr(self, name, callback)
         return callback
 
-    @asyncio.coroutine
+    @coroutine
     def _send_command(self, command, *args, **kwargs):
         command_id = self.last_command_id + 1
         self.last_command_id += 1

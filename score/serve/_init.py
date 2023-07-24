@@ -39,12 +39,18 @@ import traceback
 import signal
 import logging
 from .worker import Worker
+
 try:
     import uvloop
 except ImportError:
     pass
 else:
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+
+try:
+    from types import coroutine
+except ImportError:
+    from asyncio import coroutine
 
 
 log = logging.getLogger('score.serve')
@@ -114,7 +120,7 @@ class ConfiguredServeModule(ConfiguredModule):
         forking would break both of them. This is the reason we are resolving
         hostnames synchronously.
         """
-        @asyncio.coroutine
+        @coroutine
         def getaddrinfo():
             return socket.getaddrinfo(host, port, family, type, proto, flags)
         return getaddrinfo()
@@ -232,7 +238,7 @@ class _ServerInstance:
         self.loop.create_task(self.stop())
         self.reload = False
 
-    @asyncio.coroutine
+    @coroutine
     def stop(self):
         if self.__stopping:
             return
@@ -284,7 +290,7 @@ class _ServerInstance:
             self.reload = True
         self.loop.create_task(self.stop())
 
-    @asyncio.coroutine
+    @coroutine
     def wait_on_pending_tasks(self, ignored_tasks=None):
         event = asyncio.Event(loop=self.loop)
         if ignored_tasks is None:

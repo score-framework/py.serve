@@ -30,6 +30,11 @@ import json
 from collections import OrderedDict
 import warnings
 
+try:
+    from types import coroutine
+except ImportError:
+    from asyncio import coroutine
+
 
 class ServiceMonitorProtocol(asyncio.Protocol):
 
@@ -94,7 +99,7 @@ class ServiceMonitorProtocol(asyncio.Protocol):
         services = OrderedDict((k, v.value) for k, v in services.items())
         self._send(json.dumps(services))
 
-    @asyncio.coroutine
+    @coroutine
     def _send_service_states_async(self):
         if self.server is None:
             return

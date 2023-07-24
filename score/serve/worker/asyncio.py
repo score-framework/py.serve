@@ -20,6 +20,10 @@ except ImportError:
 
         def queue_task():
             try:
+                # 'async' has become a keyword starting with
+                # python 3.5, leading to parse errors for this file if
+                # we write `asyncio.async`. That's why we're using
+                # getattr() here.
                 task_future = getattr(asyncio, 'async')(coro, loop=loop)
                 task_future.add_done_callback(done)
             except Exception as exc:
@@ -29,6 +33,11 @@ except ImportError:
 
         loop.call_soon_threadsafe(queue_task)
         return future
+
+try:
+    from types import coroutine
+except ImportError:
+    from asyncio import coroutine
 
 
 class AsyncioWorker(Worker):
@@ -47,8 +56,7 @@ class AsyncioWorker(Worker):
 
         class EchoServer(AsyncioWorker):
 
-            @asyncio.coroutine
-            def _start(self):
+            async def _start(self):
                 self.server = yield from self.loop.create_server(myserver)
 
             def _pause(self):
@@ -162,31 +170,31 @@ class AsyncioWorker(Worker):
         event.set()
         self.loop.run_forever()
 
-    @asyncio.coroutine
+    @coroutine
     def __prepare(self):
         result = self._prepare()
         if asyncio.iscoroutine(result):
             result = yield from result
 
-    @asyncio.coroutine
+    @coroutine
     def __start(self):
         result = self._start()
         if asyncio.iscoroutine(result):
             result = yield from result
 
-    @asyncio.coroutine
+    @coroutine
     def __pause(self):
         result = self._pause()
         if asyncio.iscoroutine(result):
             result = yield from result
 
-    @asyncio.coroutine
+    @coroutine
     def __stop(self):
         result = self._stop()
         if asyncio.iscoroutine(result):
             result = yield from result
 
-    @asyncio.coroutine
+    @coroutine
     def __cleanup(self, exception):
         result = self._cleanup(exception)
         if asyncio.iscoroutine(result):
