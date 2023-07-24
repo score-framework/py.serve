@@ -27,6 +27,7 @@
 
 import socket
 import asyncio
+import sys
 from score.init import (
     ConfiguredModule, parse_list, parse_bool, parse_host_port, init_from_file,
     InitializationError)
@@ -243,7 +244,7 @@ class _ServerInstance:
         if self.__stopping:
             return
         self.__stopping = True
-        event = asyncio.Event(loop=self.loop)
+        event = self.__create_asyncio_event()
 
         def signal_if_all_stopped(states):
             if not self.all_services_stopped(states):
@@ -292,7 +293,7 @@ class _ServerInstance:
 
     @coroutine
     def wait_on_pending_tasks(self, ignored_tasks=None):
-        event = asyncio.Event(loop=self.loop)
+        event = self.__create_asyncio_event()
         if ignored_tasks is None:
             ignored_tasks = []
         ignored_tasks.append(self.__current_asyncio_task())
@@ -326,6 +327,13 @@ class _ServerInstance:
             return asyncio.current_task(loop=self.loop)
         else:
             return asyncio.Task.current_task(loop=self.loop)
+
+    def __create_asyncio_event(self):
+        if sys.version_info.major == 3 and sys.version_info.minor < 10:
+            return asyncio.Event(loop=self.loop)
+        else:
+            # The loop kwarg was removed in Python 3.10
+            return asyncio.Event()
 
 
 class ServiceController(Backgrounded):
