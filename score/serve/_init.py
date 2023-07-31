@@ -413,9 +413,10 @@ class ServiceController(Backgrounded):
     def _collect_services(self):
         self._services = OrderedDict()
         score = init_from_file(self.conf.conf)
-        if self._changedetector:
+        changedetector = self._changedetector
+        if changedetector:
             for file in parse_list(score.conf['score.init']['_files']):
-                self._changedetector.observe(file)
+                changedetector.observe(file)
         for desc in self.conf.modules:
             for name, worker in self._iter_workers(score, desc):
                 self._services[name] = Service(name, worker)
